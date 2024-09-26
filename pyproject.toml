@@ -1,13 +1,17 @@
 [tool.poetry]
-name = "p5-simulation"
+name = "p5_simulation"
 version = "0.1.0"
 description = ""
-authors = ["= <z4ppatron@gmail.com>"]
+authors = ["Alexander Götzsche Dougherty <adough22@student.aau.dk>"]
 readme = "README.md"
+packages = [{ include = "p5_simulation" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
+numpy = "2.1.1"
 
+[tool.poetry.scripts]
+project = "p5_simulation.main:main"
 
 [build-system]
 requires = ["poetry-core"]
