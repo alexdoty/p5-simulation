@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Self, Optional
+from typing import Self, Optional
 from functools import cached_property
 import numpy as np
 from numpy.typing import NDArray
@@ -9,6 +9,7 @@ SOURCE_VOLTAGE = 240
 Resistance = float
 Voltage = float
 Current = float
+
 
 # Very particular tree implementation for our needs. B).
 class NetworkNode:
@@ -26,12 +27,12 @@ class NetworkNode:
         sum_of_reciprocals = 0
         if self.iresistance is not None:
             sum_of_reciprocals += 1 / self.iresistance
-        for (child, r) in self.children:
-           sum_of_reciprocals += 1 / (r + child.resistance)
+        for child, r in self.children:
+            sum_of_reciprocals += 1 / (r + child.resistance)
         return 1 / sum_of_reciprocals
 
     def get_direct_child_resistance(self, child: NetworkNode) -> Resistance:
-        for (c, r) in self.children:
+        for c, r in self.children:
             if c is child:
                 return r
         raise Exception
@@ -40,20 +41,25 @@ class NetworkNode:
     def voltage(self) -> Voltage:
         if self.parent is None:
             return SOURCE_VOLTAGE
-        return self.parent.voltage - self.current * self.parent.get_direct_child_resistance(self)
+        return (
+            self.parent.voltage
+            - self.current * self.parent.get_direct_child_resistance(self)
+        )
 
     @cached_property
     def current(self) -> Current:
         if self.parent is None:
             return self.voltage / self.resistance
-        return self.parent.voltage / (self.parent.get_direct_child_resistance(self) + self.resistance)
+        return self.parent.voltage / (
+            self.parent.get_direct_child_resistance(self) + self.resistance
+        )
 
     def add_child(self, child: NetworkNode, resistance: Resistance):
         self.children.append((child, resistance))
 
     def set_node_indices(self, next_index: int) -> int:
         self.index = next_index
-        for (child, _) in self.children:
+        for child, _ in self.children:
             next_index += 1
             next_index = child.set_node_indices(next_index)
         return next_index
@@ -71,14 +77,14 @@ class NetworkNode:
         if len(self.children) != 0:
             kirchoff = np.zeros(total_nodes * 2)
             kirchoff[self.current_index(total_nodes)] = 1
-            for (child, _) in self.children:
+            for child, _ in self.children:
                 kirchoff[child.current_index(total_nodes)] = -1
             eqs = np.vstack((eqs, kirchoff))
         return eqs
 
     def all_equations(self, total_nodes: int) -> NDArray:
         eqs = self.equations(total_nodes)
-        for (child, _) in self.children:
+        for child, _ in self.children:
             eqs = np.vstack((eqs, child.all_equations(total_nodes)))
         return eqs
 
@@ -90,7 +96,7 @@ class NetworkNode:
     def set_state_entries(self, state: NDArray, total_nodes: int):
         state[self.voltage_index()] = self.voltage
         state[self.current_index(total_nodes)] = self.current
-        for (child, _) in self.children:
+        for child, _ in self.children:
             child.set_state_entries(state, total_nodes)
 
     def print_stats(self):

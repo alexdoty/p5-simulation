@@ -1,6 +1,4 @@
-from numpy import array
 import numpy as np
-from numpy.typing import NDArray
 from p5_simulation.trees import NetworkNode
 from p5_simulation.utils import *
 
@@ -33,14 +31,14 @@ def main():
 
     MLE = MLE_matrix(root, D, total_nodes)
 
-    MLE_inv= np.linalg.inv(MLE)
+    MLE_inv = np.linalg.inv(MLE)
     residuals = 0
     for _ in range(1):
         z = compute_z_vector(root, D, 4.0, 0.002, total_nodes)
 
         result_vector = MLE_result(root, z, D, total_nodes)
 
-        x_hat = (MLE_inv @ result_vector)[:total_nodes * 2]
+        x_hat = (MLE_inv @ result_vector)[: total_nodes * 2]
         print(x_hat)
         print(root.state_vector(total_nodes))
         residuals += np.linalg.norm(x_hat - root.state_vector(total_nodes))
