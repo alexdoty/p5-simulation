@@ -11,6 +11,8 @@ Voltage = complex
 Current = complex
 Impedance = complex
 
+Numeric = int | float | complex
+
 
 # Very particular tree implementation for our needs. B).
 class NetworkNode:
@@ -70,7 +72,7 @@ class NetworkNode:
         return self.index
 
     def current_index(self) -> int:
-        return self.index + self.network.size - 1
+        return self.index + self.network.size
 
     def equations(self) -> NDArray:
         size = self.network.size
@@ -99,14 +101,13 @@ class NetworkNode:
         return eqs
 
     def state_vector(self) -> NDArray:
-        vector = np.zeros(self.network.size * 2)
+        vector = np.zeros(self.network.size * 2, dtype=complex)
         self.set_state_entries(vector)
         return vector
 
     def set_state_entries(self, state: NDArray):
         state[self.voltage_index()] = self.voltage
-        if self.parent is not None:
-            state[self.current_index()] = self.current
+        state[self.current_index()] = self.current
         for child, _ in self.children:
             child.set_state_entries(state)
 
@@ -120,7 +121,7 @@ class NetworkNode:
 class Network:
     size: int
     root: NetworkNode
-    nodes: [NetworkNode]
+    nodes: list[NetworkNode]
 
     @classmethod
     def singleton(cls) -> Self:
@@ -130,11 +131,12 @@ class Network:
         net.root = root
         net.nodes = [root]
         net.size = 1
+        return net
 
     # Shorthand for network creation
-    # each connection is [parent, res] or [parent, res, ires] in the case of a sink
+    # each connection is [from, to, res] or [from, to, res, ires] in the case of a sink
     @classmethod
-    def from_connections(cls, cons: list[list[int | float]]) -> Self:
+    def from_connections(cls, cons: list[list[Numeric]]) -> Self:
         net = cls()
         root = NetworkNode(net, None, [], None)
         root.index = 0
@@ -145,13 +147,13 @@ class Network:
             parent = nodes[con[0]]
             if parent is None:
                 raise Exception(f"Parent {con[0]} is none")
-            iresistance = None if len(con) < 4 else Resistance(con[3])
-            node = NetworkNode(net, parent, [], iresistance)
+            i_impedance = None if len(con) < 4 else Impedance(con[3])
+            node = NetworkNode(net, parent, [], i_impedance)
             node.index = con[1]
             if nodes[con[1]] is not None:
                 raise Exception(f"Attempting to write to node {con[1]} twice")
             nodes[con[1]] = node
-            parent.add_child(node, Resistance(con[2]))
+            parent.add_child(node, Impedance(con[2]))
 
         net.root = root
         net.nodes = nodes
@@ -166,8 +168,8 @@ class Network:
         return D
 
     def all_error_vector(self, voltage_stdev: float, current_stdev: float) -> NDArray:
-        error_v = np.random.normal(size=self.size, scale=voltage_stdev)
-        error_i = np.random.normal(size=self.size, scale=current_stdev)
+        error_v = np.random.normal(size=(self.size,2), scale=voltage_stdev).view(np.complex128).reshape(self.size)
+        error_i = np.random.normal(size=(self.size, 2), scale=current_stdev).view(np.complex128).reshape(self.size)
         return np.concatenate((error_v, error_i))
 
     def compute_z_vector(
@@ -192,3 +194,6 @@ class Network:
         for node in self.nodes:
             node.print_stats()
             print()
+
+    def draw(self, pos: tuple[int, int] = (0, 0)):
+        pass
