@@ -14,7 +14,7 @@ def main():
 
     net.print_node_stats()
 
-    D = net.create_D_matrix([2, 3, 5])
+    D = net.create_D_matrix([0,1,2, 3, 5])
 
     MLE = net.MLE_matrix(D)
 

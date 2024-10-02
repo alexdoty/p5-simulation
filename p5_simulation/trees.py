@@ -73,16 +73,23 @@ class NetworkNode:
 
     def equations(self) -> NDArray:
         size = self.network.size
-        eqs = np.zeros(size * 2)
-        eqs[self.voltage_index()] = 1
-        eqs[self.current_index()] = -self.resistance
+        eqs = []
+        if self.parent is not None:
+            ohm = np.zeros(size * 2)
+            ohm[self.parent.voltage_index()] = 1
+            ohm[self.voltage_index()] = -1
+            ohm[self.current_index()] = -self.parent.get_direct_child_resistance(self)
+            eqs.append(ohm)
         if len(self.children) != 0:
             kirchoff = np.zeros(size * 2)
             kirchoff[self.current_index()] = 1
             for child, _ in self.children:
                 kirchoff[child.current_index()] = -1
-            eqs = np.vstack((eqs, kirchoff))
-        return eqs
+            eqs.append(kirchoff)
+        if len(eqs) == 1:
+            return eqs[0]
+        else:
+            return np.vstack(tuple(eqs))
 
     def all_equations(self) -> NDArray:
         eqs = self.equations()
