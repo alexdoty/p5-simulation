@@ -7,35 +7,36 @@ from numpy.typing import NDArray
 SOURCE_VOLTAGE = 240
 
 Resistance = float
-Voltage = float
-Current = float
+Voltage = complex
+Current = complex
+Impedance = complex
 
 
 # Very particular tree implementation for our needs. B).
 class NetworkNode:
     parent: Optional[NetworkNode]
-    children: list[tuple[NetworkNode, Resistance]]
-    iresistance: Resistance | None
+    children: list[tuple[NetworkNode, Impedance]]
+    iresistance: Impedance | None
 
-    def __init__(self, network, parent, children, iresistance) -> None:
+    def __init__(self, network, parent, children, i_impedance) -> None:
         self.network = network
         self.parent = parent
         self.children = children
-        self.iresistance = iresistance
+        self.i_impedance = i_impedance
 
     @cached_property
-    def resistance(self) -> Resistance:
+    def impedance(self) -> Impedance:
         sum_of_reciprocals = 0
-        if self.iresistance is not None:
-            sum_of_reciprocals += 1 / self.iresistance
-        for child, r in self.children:
-            sum_of_reciprocals += 1 / (r + child.resistance)
+        if self.i_impedance is not None:
+            sum_of_reciprocals += 1 / self.i_impedance
+        for child, imp in self.children:
+            sum_of_reciprocals += 1 / (imp + child.impedance)
         return 1 / sum_of_reciprocals
 
-    def get_direct_child_resistance(self, child: NetworkNode) -> Resistance:
-        for c, r in self.children:
+    def get_direct_child_impedance(self, child: NetworkNode) -> Impedance:
+        for c, imp in self.children:
             if c is child:
-                return r
+                return imp
         raise Exception
 
     @cached_property
@@ -44,19 +45,19 @@ class NetworkNode:
             return SOURCE_VOLTAGE
         return (
             self.parent.voltage
-            - self.current * self.parent.get_direct_child_resistance(self)
+            - self.current * self.parent.get_direct_child_impedance(self)
         )
 
     @cached_property
     def current(self) -> Current:
         if self.parent is None:
-            return self.voltage / self.resistance
+            return self.voltage / self.impedance
         return self.parent.voltage / (
-            self.parent.get_direct_child_resistance(self) + self.resistance
+            self.parent.get_direct_child_impedance(self) + self.impedance
         )
 
-    def add_child(self, child: NetworkNode, resistance: Resistance):
-        self.children.append((child, resistance))
+    def add_child(self, child: NetworkNode, impedance: Impedance):
+        self.children.append((child, impedance))
 
     def set_node_indices(self, next_index: int) -> int:
         self.index = next_index
@@ -69,19 +70,19 @@ class NetworkNode:
         return self.index
 
     def current_index(self) -> int:
-        return self.index + self.network.size
+        return self.index + self.network.size - 1
 
     def equations(self) -> NDArray:
         size = self.network.size
         eqs = []
         if self.parent is not None:
-            ohm = np.zeros(size * 2)
+            ohm = np.zeros(size * 2, dtype=complex)
             ohm[self.parent.voltage_index()] = 1
             ohm[self.voltage_index()] = -1
-            ohm[self.current_index()] = -self.parent.get_direct_child_resistance(self)
+            ohm[self.current_index()] = -self.parent.get_direct_child_impedance(self)
             eqs.append(ohm)
         if len(self.children) != 0:
-            kirchoff = np.zeros(size * 2)
+            kirchoff = np.zeros(size * 2, dtype=complex)
             kirchoff[self.current_index()] = 1
             for child, _ in self.children:
                 kirchoff[child.current_index()] = -1
@@ -104,7 +105,8 @@ class NetworkNode:
 
     def set_state_entries(self, state: NDArray):
         state[self.voltage_index()] = self.voltage
-        state[self.current_index()] = self.current
+        if self.parent is not None:
+            state[self.current_index()] = self.current
         for child, _ in self.children:
             child.set_state_entries(state)
 
@@ -112,7 +114,7 @@ class NetworkNode:
         print(f"Index: {self.index}")
         print(f"Voltage: {self.voltage}")
         print(f"Current: {self.current}")
-        print(f"Resistance: {self.resistance}")
+        print(f"Resistance: {self.impedance}")
 
 
 class Network:
