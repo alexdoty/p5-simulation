@@ -3,10 +3,10 @@ from typing import Self, Optional
 from functools import cached_property
 import numpy as np
 from numpy.typing import NDArray
+from math import tau
 
 SOURCE_VOLTAGE = 240
 
-Resistance = float
 Voltage = complex
 Current = complex
 Impedance = complex
@@ -18,7 +18,12 @@ Numeric = int | float | complex
 class NetworkNode:
     parent: Optional[NetworkNode]
     children: list[tuple[NetworkNode, Impedance]]
-    iresistance: Impedance | None
+    i_impedance: Impedance | None
+
+    next_neighbor: Optional[NetworkNode] = None
+    prev_neighbor: Optional[NetworkNode] = None
+    angle = 0
+    error = 0
 
     def __init__(self, network, parent, children, i_impedance) -> None:
         self.network = network
@@ -115,8 +120,85 @@ class NetworkNode:
         print(f"Index: {self.index}")
         print(f"Voltage: {self.voltage}")
         print(f"Current: {self.current}")
-        print(f"Resistance: {self.impedance}")
+        print(f"Impedance: {self.impedance}")
 
+    def set_neighbors(self, last_seen: list[NetworkNode], generation_sizes: list[int], generation: int) -> tuple[list[NetworkNode], list[int]]:
+        if self.parent is not None:
+            if generation >= len(last_seen):
+                last_seen.append(self)
+                generation_sizes.append(1)
+            else:
+                last_seen[generation].next_neighbor = self
+                self.prev_neighbor = last_seen[generation]
+                last_seen[generation] = self
+                generation_sizes[generation] += 1
+        else:
+            last_seen.append(self)
+            generation_sizes.append(1)
+        for child, _ in self.children:
+            last_seen, generation_sizes = child.set_neighbors(last_seen, generation_sizes, generation+1)
+        if self.parent is None:
+            for node in last_seen:
+                cur_node = node
+                print(cur_node.index, "aaaa")
+                while cur_node.prev_neighbor is not None:
+                    cur_node = cur_node.prev_neighbor
+                    print(cur_node.index, "bbbb")
+                cur_node.prev_neighbor = node
+                node.next_neighbor = cur_node
+
+        return (last_seen, generation_sizes)
+
+
+
+    def update_angular_error_derivatives(self, generation, generation_sizes) -> tuple[float, float]:
+        if self.parent is None:
+            child_error_derivatives = 0
+            child_errors = 0
+            for child, _ in self.children:
+                child_error_derivative, child_error = child.update_angular_error_derivatives(generation + 1, generation_sizes)
+                child_error_derivatives += child_error_derivative
+                child_errors += child_error
+            self.error = child_error_derivatives
+            return (self.error, child_errors)
+        angle_to_next = self.next_neighbor.angle - self.angle
+        if angle_to_next < 0:
+            angle_to_next += tau
+        deviation_next = preferred_distance(self,self.next_neighbor, generation, generation_sizes[generation]) - angle_to_next
+        if deviation_next > 0:
+            deviation_next *= 0.1
+        angle_from_prev = self.angle - self.prev_neighbor.angle
+        if angle_from_prev < 0:
+            angle_from_prev += tau
+        deviation_prev = angle_from_prev - preferred_distance(self,self.prev_neighbor, generation, generation_sizes[generation])
+        if deviation_prev > 0:
+            deviation_prev *= 0.1
+        child_error_derivatives = 0
+        child_errors = 0
+        for child, _ in self.children:
+            child_error_derivative, child_error = child.update_angular_error_derivatives(generation + 1, generation_sizes)
+            child_error_derivatives += child_error_derivative
+            child_errors += child_error
+        self.error = deviation_next + deviation_prev + child_error_derivatives
+        return (self.error, child_errors + deviation_next**2 + deviation_prev**2)
+
+    def update_angles(self, step_factor: float):
+        self.angle -= self.error * step_factor
+        self.angle %= tau
+        print(self.index, self.angle)
+        for child, _ in self.children:
+            child.update_angles(step_factor)
+
+def get_parental_distance(a, b):
+    r = 1
+    while (a := a.parent) is not (b := b.parent):
+        r += 1
+    return r
+
+def preferred_distance(a, b, generation, generation_size):
+    return tau
+    r = get_parental_distance(a,b)
+    return min(tau / generation_size, (1 + r) * tau / 12 / generation)
 
 class Network:
     size: int
@@ -134,7 +216,7 @@ class Network:
         return net
 
     # Shorthand for network creation
-    # each connection is [from, to, res] or [from, to, res, ires] in the case of a sink
+    # each connection is [from, to, imp] or [from, to, imp, i_imp] in the case of a sink
     @classmethod
     def from_connections(cls, cons: list[list[Numeric]]) -> Self:
         net = cls()
@@ -194,6 +276,31 @@ class Network:
         for node in self.nodes:
             node.print_stats()
             print()
+
+    def set_angles(self):
+        last_seen, generation_sizes = self.root.set_neighbors([], [], 0)
+        print(self.nodes[1].prev_neighbor.index)
+        print(self.nodes[1].next_neighbor.index)
+        print(self.nodes[2].next_neighbor.index)
+        print(self.nodes[2].next_neighbor.index)
+        for g, node in enumerate(last_seen):
+            node.angle = 0
+            cur_node = node.next_neighbor
+            i = 0
+            while cur_node is not node:
+                i += 1
+                cur_node.angle = tau / generation_sizes[g] * i / 2
+                cur_node = cur_node.next_neighbor
+        for _ in range(100):
+            der, error = self.root.update_angular_error_derivatives(0, generation_sizes)
+            #print(der)
+            #print(error)
+            print()
+            self.root.update_angles(0.01)
+            if der < 0.1:
+                break
+
+
 
     def draw(self, pos: tuple[int, int] = (0, 0)):
         pass
