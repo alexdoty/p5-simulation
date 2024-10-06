@@ -4,8 +4,10 @@ from functools import cached_property
 import numpy as np
 from numpy.typing import NDArray
 from math import tau
+import enum
 
-SOURCE_VOLTAGE = 240
+
+SOURCE_VOLTAGE = 240.0 + 0.0j
 
 Voltage = complex
 Current = complex
@@ -14,21 +16,31 @@ Impedance = complex
 Numeric = int | float | complex
 
 
+class MeterType(enum.Enum):
+    NONE = 1
+    EM = 2
+    PMU = 3
+    VOLTAGE = 4
+    CURRENT = 5
+
+
 # Very particular tree implementation for our needs. B).
 class NetworkNode:
     parent: Optional[NetworkNode]
     children: list[tuple[NetworkNode, Impedance]]
     i_impedance: Impedance | None
+    meter: MeterType
 
     next_neighbor: Optional[NetworkNode] = None
     prev_neighbor: Optional[NetworkNode] = None
     angle = 0
     error = 0
 
-    def __init__(self, network, parent, children, i_impedance) -> None:
+    def __init__(self, network, parent, meter, i_impedance) -> None:
         self.network = network
         self.parent = parent
-        self.children = children
+        self.children = []
+        self.meter = meter
         self.i_impedance = i_impedance
 
     @cached_property
@@ -105,24 +117,15 @@ class NetworkNode:
             eqs = np.vstack((eqs, child.all_equations()))
         return eqs
 
-    def state_vector(self) -> NDArray:
-        vector = np.zeros(self.network.size * 2, dtype=complex)
-        self.set_state_entries(vector)
-        return vector
-
-    def set_state_entries(self, state: NDArray):
-        state[self.voltage_index()] = self.voltage
-        state[self.current_index()] = self.current
-        for child, _ in self.children:
-            child.set_state_entries(state)
-
     def print_stats(self):
         print(f"Index: {self.index}")
         print(f"Voltage: {self.voltage}")
         print(f"Current: {self.current}")
         print(f"Impedance: {self.impedance}")
 
-    def set_neighbors(self, last_seen: list[NetworkNode], generation_sizes: list[int], generation: int) -> tuple[list[NetworkNode], list[int]]:
+    def set_neighbors(
+        self, last_seen: list[NetworkNode], generation_sizes: list[int], generation: int
+    ) -> tuple[list[NetworkNode], list[int]]:
         if self.parent is not None:
             if generation >= len(last_seen):
                 last_seen.append(self)
@@ -136,7 +139,9 @@ class NetworkNode:
             last_seen.append(self)
             generation_sizes.append(1)
         for child, _ in self.children:
-            last_seen, generation_sizes = child.set_neighbors(last_seen, generation_sizes, generation+1)
+            last_seen, generation_sizes = child.set_neighbors(
+                last_seen, generation_sizes, generation + 1
+            )
         if self.parent is None:
             for node in last_seen:
                 cur_node = node
@@ -149,14 +154,18 @@ class NetworkNode:
 
         return (last_seen, generation_sizes)
 
-
-
-    def update_angular_error_derivatives(self, generation, generation_sizes) -> tuple[float, float]:
+    def update_angular_error_derivatives(
+        self, generation, generation_sizes
+    ) -> tuple[float, float]:
         if self.parent is None:
             child_error_derivatives = 0
             child_errors = 0
             for child, _ in self.children:
-                child_error_derivative, child_error = child.update_angular_error_derivatives(generation + 1, generation_sizes)
+                child_error_derivative, child_error = (
+                    child.update_angular_error_derivatives(
+                        generation + 1, generation_sizes
+                    )
+                )
                 child_error_derivatives += child_error_derivative
                 child_errors += child_error
             self.error = child_error_derivatives
@@ -164,19 +173,28 @@ class NetworkNode:
         angle_to_next = self.next_neighbor.angle - self.angle
         if angle_to_next < 0:
             angle_to_next += tau
-        deviation_next = preferred_distance(self,self.next_neighbor, generation, generation_sizes[generation]) - angle_to_next
+        deviation_next = (
+            preferred_distance(
+                self, self.next_neighbor, generation, generation_sizes[generation]
+            )
+            - angle_to_next
+        )
         if deviation_next > 0:
             deviation_next *= 0.1
         angle_from_prev = self.angle - self.prev_neighbor.angle
         if angle_from_prev < 0:
             angle_from_prev += tau
-        deviation_prev = angle_from_prev - preferred_distance(self,self.prev_neighbor, generation, generation_sizes[generation])
+        deviation_prev = angle_from_prev - preferred_distance(
+            self, self.prev_neighbor, generation, generation_sizes[generation]
+        )
         if deviation_prev > 0:
             deviation_prev *= 0.1
         child_error_derivatives = 0
         child_errors = 0
         for child, _ in self.children:
-            child_error_derivative, child_error = child.update_angular_error_derivatives(generation + 1, generation_sizes)
+            child_error_derivative, child_error = (
+                child.update_angular_error_derivatives(generation + 1, generation_sizes)
+            )
             child_error_derivatives += child_error_derivative
             child_errors += child_error
         self.error = deviation_next + deviation_prev + child_error_derivatives
@@ -189,26 +207,34 @@ class NetworkNode:
         for child, _ in self.children:
             child.update_angles(step_factor)
 
+
 def get_parental_distance(a, b):
     r = 1
     while (a := a.parent) is not (b := b.parent):
         r += 1
     return r
 
+
 def preferred_distance(a, b, generation, generation_size):
     return tau
-    r = get_parental_distance(a,b)
+    r = get_parental_distance(a, b)
     return min(tau / generation_size, (1 + r) * tau / 12 / generation)
+
 
 class Network:
     size: int
     root: NetworkNode
     nodes: list[NetworkNode]
 
+    source_voltage: Voltage = 240.0 + 0.0j
+    phase_stdev: float = 0.1
+    voltage_stdev: float = 0.1
+    current_stdev: float = 0.1
+
     @classmethod
     def singleton(cls) -> Self:
         net = cls()
-        root = NetworkNode(net, None, [], None)
+        root = NetworkNode(net, None, None)
         root.index = 0
         net.root = root
         net.nodes = [root]
@@ -216,11 +242,11 @@ class Network:
         return net
 
     # Shorthand for network creation
-    # each connection is [from, to, imp] or [from, to, imp, i_imp] in the case of a sink
+    # each connection is [from, to, meter, imp] or [from, to, meter, imp, i_imp] in the case of a sink
     @classmethod
     def from_connections(cls, cons: list[list[Numeric]]) -> Self:
         net = cls()
-        root = NetworkNode(net, None, [], None)
+        root = NetworkNode(net, None, MeterType.VOLTAGE, None)
         root.index = 0
         nodes = [None] * (len(cons) + 1)
         nodes[0] = root
@@ -229,13 +255,13 @@ class Network:
             parent = nodes[con[0]]
             if parent is None:
                 raise Exception(f"Parent {con[0]} is none")
-            i_impedance = None if len(con) < 4 else Impedance(con[3])
-            node = NetworkNode(net, parent, [], i_impedance)
+            i_impedance = None if len(con) < 5 else Impedance(con[4])
+            node = NetworkNode(net, parent, con[2], i_impedance)
             node.index = con[1]
             if nodes[con[1]] is not None:
                 raise Exception(f"Attempting to write to node {con[1]} twice")
             nodes[con[1]] = node
-            parent.add_child(node, Impedance(con[2]))
+            parent.add_child(node, Impedance(con[3]))
 
         net.root = root
         net.nodes = nodes
@@ -243,15 +269,44 @@ class Network:
 
         return net
 
-    def create_D_matrix(self, indices: list[int]) -> NDArray:
+    def state_vector(self) -> NDArray:
+        state = np.zeros(self.size * 2, dtype=complex)
+        for node in self.nodes:
+            state[node.voltage_index()] = node.voltage
+            state[node.current_index()] = node.current
+        return state
+
+    def create_D_matrix(self) -> NDArray:
+        indices = []
+        for node in self.nodes:
+            match node.meter:
+                case MeterType.EM | MeterType.PMU:
+                    indices.append(node.voltage_index())
+                    indices.append(node.current_index())
+                case MeterType.VOLTAGE:
+                    indices.append(node.voltage_index())
+                case MeterType.CURRENT:
+                    indices.append(node.current_index())
+
         D = np.zeros((len(indices), self.size * 2))
         for i, index in enumerate(indices):
             D[i, index] = 1
         return D
 
+    def realize_measurements(self):
+        return
+
     def all_error_vector(self, voltage_stdev: float, current_stdev: float) -> NDArray:
-        error_v = np.random.normal(size=(self.size,2), scale=voltage_stdev).view(np.complex128).reshape(self.size)
-        error_i = np.random.normal(size=(self.size, 2), scale=current_stdev).view(np.complex128).reshape(self.size)
+        error_v = (
+            np.random.normal(size=(self.size, 2), scale=voltage_stdev)
+            .view(np.complex128)
+            .reshape(self.size)
+        )
+        error_i = (
+            np.random.normal(size=(self.size, 2), scale=current_stdev)
+            .view(np.complex128)
+            .reshape(self.size)
+        )
         return np.concatenate((error_v, error_i))
 
     def compute_z_vector(
@@ -261,7 +316,7 @@ class Network:
         current_stdev: float,
     ) -> NDArray:
         errors = self.all_error_vector(voltage_stdev, current_stdev)
-        x = self.root.state_vector()
+        x = self.state_vector()
         return D @ (x + errors)
 
     def MLE_matrix(self, D: NDArray) -> NDArray:
@@ -293,14 +348,12 @@ class Network:
                 cur_node = cur_node.next_neighbor
         for _ in range(100):
             der, error = self.root.update_angular_error_derivatives(0, generation_sizes)
-            #print(der)
-            #print(error)
+            # print(der)
+            # print(error)
             print()
             self.root.update_angles(0.01)
             if der < 0.1:
                 break
-
-
 
     def draw(self, pos: tuple[int, int] = (0, 0)):
         pass
