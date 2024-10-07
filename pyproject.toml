@@ -9,6 +9,7 @@ packages = [{ include = "p5_simulation" }]
 [tool.poetry.dependencies]
 python = "^3.12"
 numpy = "^2.0.2"
+pygame = "^2.6.1"
 
 [tool.poetry.scripts]
 project = "p5_simulation.main:main"

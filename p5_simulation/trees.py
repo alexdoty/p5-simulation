@@ -4,6 +4,8 @@ from functools import cached_property
 import numpy as np
 from numpy.typing import NDArray
 
+from p5_simulation import draw
+
 SOURCE_VOLTAGE = 240
 
 Resistance = float
@@ -196,4 +198,34 @@ class Network:
             print()
 
     def draw(self, pos: tuple[int, int] = (0, 0)):
-        pass
+        W = 1920
+        H = 1080
+
+        import pygame as pg
+        from pygame import gfxdraw
+
+        pg.init()
+        pg.font.init()
+
+        layer0: pg.Surface = pg.display.set_mode((W, H))
+        layer1: pg.Surface = pg.display.set_mode((W, H))
+        pg.display.set_caption("Network Graph")
+        exit: bool = False
+
+        font = pg.font.Font(pg.font.get_default_font(), 30)
+
+        manager = draw.DrawManager(layer0, layer1, font)
+        for i in range(1, 60):
+            _ = draw.Node.tomanager(manager, ((i * 60, i * 60), i * 30, i))
+
+        manager.setup()
+
+        while not exit:
+            layer0.fill(draw.colors["black"])
+            manager.draw()
+            for event in pg.event.get():
+                print(event.type)
+                if event.type == pg.QUIT or event.type == 769:
+                    exit = True
+            pg.display.update()
+        pg.quit()
