@@ -15,9 +15,17 @@ def main():
             # [2,6, 30, 1000],
             [0, 1, EM, 40 + 40j],
             [0, 2, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [1, 3, EM, 50 + 60j, 2_000 + 3_000j],
-            [1, 4, EM, 50 + 30j, 2_000 + 2_000j],
-            [1, 5, EM, 50 + 30j, 2_000 + 2_000j],
+            [0, 3, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            [1, 4, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            [1, 5, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            [2, 6, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            [2, 7, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            [3, 8, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            [3, 9, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            [3, 10, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [1, 3, EM, 50 + 60j, 2_000 + 3_000j],
+            # [1, 4, EM, 50 + 30j, 2_000 + 2_000j],
+            # [1, 5, EM, 50 + 30j, 2_000 + 2_000j],
             # [0, 1, 10 + 10j, 1000 + 1000j],
             # [0, 2, 5 + 10j, 1000 + 1000j],
             # [0, 3, 10 + 10j, 1000 + 1000j],
@@ -45,7 +53,11 @@ def main():
             # [8,13, 5+0.5j, 4_000+13j],
         ]
     )
-    # net.set_angles()
+    net.set_angles()
+
+    print(net.nodes[8].next_neighbor.index)
+    print(net.nodes[9].next_neighbor.index)
+    print(net.nodes[10].next_neighbor.index)
 
     net.print_node_stats()
 
