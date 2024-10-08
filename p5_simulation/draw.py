@@ -31,7 +31,7 @@ class Drawable:
         self.layer = layer
 
     @classmethod
-    def tomanager(cls, manager: DrawManager, args: tuple):
+    def to_manager(cls, manager: DrawManager, args: tuple):
         print(args)
         d = cls(*args)
         manager.add(d)
@@ -46,7 +46,7 @@ class Drawable:
 
 
 class Node(Drawable):
-    imp: int | None
+    imp: complex | None
     id: int
     ridtext: Surface
     ridrect: Rect
@@ -64,6 +64,9 @@ class Node(Drawable):
         gfxdraw.filled_circle(
             canvas, self.pos[0], self.pos[1], self.sizes[0], colors["lgray"]
         )
+        gfxdraw.aacircle(
+            canvas, self.pos[0], self.pos[1], self.sizes[0], colors["lgray"]
+        )
         gfxdraw.filled_circle(
             canvas, self.pos[0], self.pos[1], self.sizes[1], colors["white"]
         )
@@ -73,14 +76,14 @@ class Node(Drawable):
     @override
     def setup(self, *args):
         font = args[0]
-        size = None
-        if len(args) >= 1:
-            size = args[1]
-            self.sizes = size
+        if len(args) >= 2:
+            self.sizes = args[1]
 
         self.ridtext = font.render(str(self.id), True, colors["black"], None)
         ridrect = self.ridtext.get_rect()
-        ridrect.center = (self.pos[0], self.pos[1])
+        print("Pos:")
+        print(self.pos)
+        ridrect.center = self.pos
         self.ridrect = ridrect
 
         if self.imp is not None:
@@ -91,10 +94,31 @@ class Node(Drawable):
 
 
 class Edge(Drawable):
-    length: int
+    nodes: tuple[tuple[int, int], tuple[int, int]]
+    imp: complex | None
+    rimptext: Surface
+    rimprect: Rect
 
-    def __init__(self, pos, has_font=True, layer=0) -> None:
-        super().__init__(has_font, pos, layer)
+    def __init__(self, nodes, imp, has_font=True, layer=0) -> None:
+        super().__init__(has_font, None, layer)
+        self.nodes = nodes
+        self.imp = imp
+
+    @override
+    def draw(self, canvas: Surface):
+        gfxdraw.line(canvas, self.nodes[0][0], self.nodes[0][1], self.nodes[1][0], self.nodes[1][1], colors["orange"])
+        canvas.blit(self.rimptext, self.rimprect)
+
+    @override
+    def setup(self, *args):
+        font = args[0]
+        self.pos = ((self.nodes[0][0] + self.nodes[1][0])//2, (self.nodes[0][1] + self.nodes[1][1])//2)
+        if self.imp is not None:
+            self.rimptext = font.render(str(self.imp), True, colors["white"], None)
+            rimprect = self.rimptext.get_rect()
+            rimprect.center = (self.pos[0] - 30, self.pos[1] + 70)
+            self.rimprect = rimprect
+
 
 
 class DrawManager:
@@ -102,7 +126,6 @@ class DrawManager:
     layers: tuple[Surface, Surface]
     font: Font
     drawables: list[Drawable] = []
-    node_counter: int = 0
 
     def __init__(self, layer0: Surface, layer1: Surface, font: Font) -> None:
         self.layers = (layer0, layer1)

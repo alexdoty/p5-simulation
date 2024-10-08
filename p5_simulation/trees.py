@@ -10,6 +10,7 @@ import enum
 
 
 from p5_simulation import draw
+from p5_simulation.utils import pretty
 
 SOURCE_VOLTAGE = 240.0 + 0.0j
 
@@ -131,6 +132,7 @@ class NetworkNode:
     def set_neighbors(
         self, last_seen: list[NetworkNode], generation_sizes: list[int], generation: int
     ) -> tuple[list[NetworkNode], list[int]]:
+        self.generation = generation
         if self.parent is not None:
             if generation >= len(last_seen):
                 last_seen.append(self)
@@ -167,7 +169,7 @@ class NetworkNode:
 
         error_derivative = 0.0
 
-        k1 = 1
+        k1 = 0.02
         k2 = 0.1
 
         if self.parent.parent is not None:
@@ -349,8 +351,8 @@ class Network:
             print(node.index, node.angle)
 
     def draw(self, pos: tuple[int, int] = (0, 0)):
-        W = 1920
-        H = 1080
+        W = 2560
+        H = 1440
 
         import pygame as pg
         from pygame import gfxdraw
@@ -359,15 +361,27 @@ class Network:
         pg.font.init()
 
         layer0: pg.Surface = pg.display.set_mode((W, H))
-        layer1: pg.Surface = pg.display.set_mode((W, H))
+        layer1: pg.Surface = layer0
         pg.display.set_caption("Network Graph")
         exit: bool = False
 
         font = pg.font.Font(pg.font.get_default_font(), 30)
 
         manager = draw.DrawManager(layer0, layer1, font)
-        for i in range(1, 60):
-            _ = draw.Node.tomanager(manager, ((i * 60, i * 60), i * 30, i))
+        for node in self.nodes:
+            x = math.cos(node.angle) * node.generation * 300 + W / 2
+            y = math.sin(node.angle) * node.generation * 300 + H / 2
+            if node.i_impedance is not None:
+                _ = draw.Node.to_manager(manager, ((int(x), int(y)), pretty(node.i_impedance), node.index))
+            else:
+                _ = draw.Node.to_manager(manager, ((int(x), int(y)), "", node.index))
+
+
+            if node.parent is not None:
+                px = math.cos(node.parent.angle) * node.parent.generation * 300 + W / 2
+                py = math.sin(node.parent.angle) * node.parent.generation * 300 + H / 2
+                _ = draw.Edge.to_manager(manager, (((int(px), int(py)), (int(x), int(y))), pretty(node.parent.get_direct_child_impedance(node)), node.index))
+
 
         manager.setup()
 
