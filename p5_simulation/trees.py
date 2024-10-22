@@ -6,6 +6,7 @@ import numpy as np
 from numpy import typing
 from numpy.typing import NDArray
 from math import pi, tau
+import cmath
 import enum
 
 
@@ -49,6 +50,7 @@ class NetworkNode:
         self.meter = meter
         self.i_impedance = i_impedance
 
+    # Impedance between the nodes live and neutral
     @cached_property
     def impedance(self) -> Impedance:
         sum_of_reciprocals = 0
@@ -64,6 +66,7 @@ class NetworkNode:
                 return imp
         raise Exception
 
+    # Voltage between the nodes live and neutral
     @cached_property
     def voltage(self) -> Voltage:
         if self.parent is None:
@@ -73,6 +76,7 @@ class NetworkNode:
             - self.current * self.parent.get_direct_child_impedance(self)
         )
 
+    # Current going from the parent to self
     @cached_property
     def current(self) -> Current:
         if self.parent is None:
@@ -232,7 +236,7 @@ class Network:
     @classmethod
     def from_connections(cls, cons: list[list[Any]]) -> Self:
         net = cls()
-        root = NetworkNode(net, None, MeterType.VOLTAGE, None)
+        root = NetworkNode(net, None, MeterType.PMU, None)
         root.index = 0
         nodes = [None] * (len(cons) + 1)
         nodes[0] = root
@@ -280,7 +284,34 @@ class Network:
         return D
 
     def realize_measurements(self):
-        return
+        import random
+        z = np.zeros(self.size * 2, dtype=complex)
+        for node in self.nodes:
+            voltage = node.voltage
+            current = node.current
+            v = abs(voltage)
+            i = abs(current)
+            theta = cmath.phase(voltage)
+            phi = cmath.phase(current) - theta
+
+            v_err = v + random.normalvariate(0.0, 3.0)
+            i_err = i + random.normalvariate(0.0, 0.02)
+            theta_err = theta + random.normalvariate(0.0, 0.003)
+            phi_err = phi + random.normalvariate(0.0, 0.01)
+
+            if node.meter == MeterType.PMU:
+                node.theta = theta_err
+            else:
+                node.theta = node.parent.theta
+                theta_err = node.theta
+            voltage_measure = cmath.rect(v_err, theta_err)
+            current_measure = cmath.rect(i_err, phi_err + theta_err)
+
+            z[node.voltage_index()] = voltage_measure
+            z[node.current_index()] = current_measure
+
+
+        return z
 
     def all_error_vector(self, voltage_stdev: float, current_stdev: float) -> NDArray:
         error_v = (

@@ -5,36 +5,37 @@ from p5_simulation.utils import augment_vector, augment_matrix
 
 def main():
     EM = MeterType.EM
+    PMU = MeterType.PMU
     net = Network.from_connections(
         [
-            # [0,1, 40, 1000],
-            # [0,2, 30, 1000],
+            # [0,1, EM, 40+2j, 1000+4j],
+            # [0,2, EM, 30+3j, 1000+10j],
             # [0,3, 30, 1000],
             # [2,4, 30, 1000],
             # [2,5, 30, 1000],
             # [2,6, 30, 1000],
-            [0, 1, EM, 40 + 40j],
-            [0, 2, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [0, 3, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [0, 11, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [0, 12, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [0, 13, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [1, 4, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [1, 5, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [2, 6, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [2, 7, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [3, 8, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [3, 9, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [3, 10, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [11, 14, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [11, 15, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [11, 16, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [12, 17, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [12, 18, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [12, 19, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [12, 20, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [12, 21, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            [12, 22, MeterType.NONE, 5.694 + 40j, 2_000 + 1_000j],
+            # [0, 1, EM, 40 + 40j],
+            # [0, 2, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [0, 3, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [0, 11, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [0, 12, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [0, 13, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [1, 4, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [1, 5, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [2, 6, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [2, 7, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [3, 8, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [3, 9, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [3, 10, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [11, 14, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [11, 15, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [11, 16, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [12, 17, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [12, 18, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [12, 19, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [12, 20, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [12, 21, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            # [12, 22, MeterType.NONE, 5.694 + 40j, 2_000 + 1_000j],
             # [1, 3, EM, 50 + 60j, 2_000 + 3_000j],
             # [1, 4, EM, 50 + 30j, 2_000 + 2_000j],
             # [1, 5, EM, 50 + 30j, 2_000 + 2_000j],
@@ -50,22 +51,22 @@ def main():
             # [0, 10, 40 + 10j, 1000 + 1000j],
             # [0, 11, 10 + 10j, 1000 + 9000j],
             # [0, 12, 10 + 10j, 1000 + 1000j],
-            # [0,1, 30+3j],
-            # [1,2, 50+3j, 10_000+100j],
-            # [1,3, 40+3j],
-            # [3,4, 10+3j, 200+ 1j],
-            # [3,5, 10+1j, 3_500+50j],
-            # [3,6, 20+6j, 800+20j],
-            # [0,7, 100+3j, 5_000 + 10_000j],
-            # [0,8, 5+3j],
-            # [8,9, 10+2j],
-            # [9,10, 5+3j, 1_000+200j],
-            # [9,11, 5+1j, 1_000+50j],
-            # [8,12, 25+3j, 100+5j],
-            # [8,13, 5+0.5j, 4_000+13j],
+            [0,1, EM, 30+3j],
+            [1,2, EM, 50+3j, 10_000+100j],
+            [1,3, PMU, 40+3j],
+            [3,4,PMU,  10+3j, 200+ 1j],
+            [3,5,EM, 10+1j, 3_500+50j],
+            [3,6,EM, 20+6j, 800+20j],
+            [0,7,PMU, 100+3j, 5_000 + 10_000j],
+            [0,8,PMU, 5+3j],
+            [8,9,PMU, 10+2j],
+            [9,10,EM, 5+3j, 1_000+200j],
+            [9,11,PMU, 5+1j, 1_000+50j],
+            [8,12,PMU, 25+3j, 100+5j],
+            [8,13,EM, 5+0.5j, 4_000+13j],
         ]
     )
-    net.set_angles()
+    #net.set_angles()
 
 
     net.print_node_stats()
@@ -97,9 +98,11 @@ def main():
     # print(np.vectorize(lambda x: round(complex(x).real, 2))(k1))
 
     residuals = 0
-    runs = 10
+    runs = 100
     for _ in range(runs):
-        z = net.compute_z_vector(D, u_stdev, i_stdev)
+        #z = net.compute_z_vector(D, u_stdev, i_stdev)
+
+        z = D @ net.realize_measurements()
 
         g = 2 * D.T @ np.linalg.inv(P) @ z
         g_bar = augment_vector(g)
@@ -114,7 +117,7 @@ def main():
         residuals += np.linalg.norm(x_hat - net.state_vector())
     print(residuals / runs)
 
-    net.draw()
+    #net.draw()
 
 
     # MLE = net.MLE_matrix(D)
