@@ -13,7 +13,7 @@ import enum
 from p5_simulation import draw
 from p5_simulation.utils import pretty
 
-SOURCE_VOLTAGE = 240.0 + 0.0j
+SOURCE_VOLTAGE = 325.0 + 0.0j
 
 Resistance = float
 Voltage = complex
