@@ -11,7 +11,7 @@ import enum
 
 
 from p5_simulation import draw
-from p5_simulation.utils import pretty
+from p5_simulation.utils import pretty, normal_quantile
 
 SOURCE_VOLTAGE = 325.0 + 0.0j
 
@@ -165,9 +165,7 @@ class NetworkNode:
 
         return (last_seen, generation_sizes)
 
-    def update_angular_error_derivatives(
-        self, generation, generation_sizes
-    ):
+    def update_angular_error_derivatives(self, generation, generation_sizes):
         if self.parent is None:
             return
 
@@ -204,22 +202,25 @@ class NetworkNode:
     def update_angle(self, step_factor: float):
         self.angle -= self.error_derivative * step_factor
         self.angle %= tau
-        #print(self.index, self.angle)
-
-
+        # print(self.index, self.angle)
 
 
 from typing import Any
+
+s = 1
+
 
 class Network:
     size: int
     root: NetworkNode
     nodes: list[NetworkNode]
 
-    source_voltage: Voltage = 240.0 + 0.0j
-    phase_stdev: float = 0.1
-    voltage_stdev: float = 0.1
-    current_stdev: float = 0.1
+    source_voltage: Voltage = 325.0 + 0.0j
+    theta_stdev: float = 0.003 * s
+    phi_stdev: float = 0.01 * s
+    voltage_rel_err: float = 0.01 * s
+    current_rel_err: float = 0.03 * s
+    beta: float = 0.99
 
     @classmethod
     def singleton(cls) -> Self:
@@ -277,7 +278,7 @@ class Network:
                     indices.append(node.voltage_index())
                 case MeterType.CURRENT:
                     indices.append(node.current_index())
-
+        indices = sorted(indices)
         D = np.zeros((len(indices), self.size * 2))
         for i, index in enumerate(indices):
             D[i, index] = 1
@@ -285,7 +286,11 @@ class Network:
 
     def realize_measurements(self):
         import random
+
         z = np.zeros(self.size * 2, dtype=complex)
+
+        r_0 = normal_quantile((1 + self.beta) / 2, 1)
+
         for node in self.nodes:
             voltage = node.voltage
             current = node.current
@@ -294,22 +299,30 @@ class Network:
             theta = cmath.phase(voltage)
             phi = cmath.phase(current) - theta
 
-            v_err = v + random.normalvariate(0.0, 3.0)
-            i_err = i + random.normalvariate(0.0, 0.02)
-            theta_err = theta + random.normalvariate(0.0, 0.003)
-            phi_err = phi + random.normalvariate(0.0, 0.01)
+            v_stdev = v * self.voltage_rel_err / r_0
+            i_stdev = i * self.current_rel_err / r_0
+
+            v_err = v + random.normalvariate(0.0, v_stdev)
+            i_err = i + random.normalvariate(0.0, i_stdev)
+            phi_err = phi + random.normalvariate(0.0, self.phi_stdev)
 
             if node.meter == MeterType.PMU:
-                node.theta = theta_err
+                theta_err = theta + random.normalvariate(0.0, self.theta_stdev)
+                node.measured_theta = theta_err
             else:
-                node.theta = node.parent.theta
-                theta_err = node.theta
+                node.measured_theta = node.parent.measured_theta
+                theta_err = node.measured_theta
+                # node.measured_theta = 0
+
             voltage_measure = cmath.rect(v_err, theta_err)
             current_measure = cmath.rect(i_err, phi_err + theta_err)
 
+            node.measured_v = v_err
+            node.measured_i = i_err
+            node.measured_phi = phi_err
+
             z[node.voltage_index()] = voltage_measure
             z[node.current_index()] = current_measure
-
 
         return z
 
@@ -368,7 +381,7 @@ class Network:
             for node in self.nodes:
                 if node.parent is not None:
                     node.update_angular_error_derivatives(1, [])
-                    sum_of_squares += node.error_derivative ** 2
+                    sum_of_squares += node.error_derivative**2
 
             for node in self.nodes:
                 if node.parent is not None:
@@ -403,16 +416,23 @@ class Network:
             x = math.cos(node.angle) * node.generation * 300 + W / 2
             y = math.sin(node.angle) * node.generation * 300 + H / 2
             if node.i_impedance is not None:
-                _ = draw.Node.to_manager(manager, ((int(x), int(y)), pretty(node.i_impedance), node.index))
+                _ = draw.Node.to_manager(
+                    manager, ((int(x), int(y)), pretty(node.i_impedance), node.index)
+                )
             else:
                 _ = draw.Node.to_manager(manager, ((int(x), int(y)), "", node.index))
-
 
             if node.parent is not None:
                 px = math.cos(node.parent.angle) * node.parent.generation * 300 + W / 2
                 py = math.sin(node.parent.angle) * node.parent.generation * 300 + H / 2
-                _ = draw.Edge.to_manager(manager, (((int(px), int(py)), (int(x), int(y))), pretty(node.parent.get_direct_child_impedance(node)), node.index))
-
+                _ = draw.Edge.to_manager(
+                    manager,
+                    (
+                        ((int(px), int(py)), (int(x), int(y))),
+                        pretty(node.parent.get_direct_child_impedance(node)),
+                        node.index,
+                    ),
+                )
 
         manager.setup()
 
