@@ -8,6 +8,7 @@ from p5_simulation.utils import (
     normal_characteristic,
     normal_quantile,
 )
+from p5_simulation.optimize import solve
 import cmath
 import scipy
 import math
@@ -46,9 +47,15 @@ def main():
             # [12, 20, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
             # [12, 21, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
             # [12, 22, MeterType.NONE, 5.694 + 40j, 2_000 + 1_000j],
-            [0, 1, MeterType.NONE, 31 + 2j],
-            [1, 2, PMU, 20 + 5j, 1_000 + 500j],
-            [1, 3, MeterType.NONE, 12 + 3j, 1_000 + 500j],
+
+            # [0, 1, MeterType.NONE, 31 + 2j],
+            # [1, 2, PMU, 20 + 5j, 1_000 + 500j],
+            # [1, 3, MeterType.NONE, 12 + 3j, 1_000 + 500j],
+
+            [0, 1, PMU, 12 + 3j, 1_000 + 600j],
+            [0, 2, PMU, 4 + 1j, 1_500 + 300j],
+            [1, 3, PMU, 5 + 2j, 2_000 + 400j],
+            [1, 4, PMU, 9 + 3j, 800 + 100j]
             # [1, 3, EM, 50 + 60j, 2_000 + 3_000j],
             # [1, 4, EM, 50 + 30j, 2_000 + 2_000j],
             # [1, 5, EM, 50 + 30j, 2_000 + 2_000j],
@@ -81,75 +88,27 @@ def main():
     )
     # net.set_angles()
 
+
     net.print_node_stats()
+
+    new_net, locs = solve(net,6)
+
+    print("1-indexed locations", [i + 1 for i in locs])
+
+    return
 
     D = net.create_D_matrix()
 
-    C = net.root.all_equations()
+    _ = net.create_C_matrix()
 
     x = net.state_vector()
     z = D @ net.realize_measurements()
 
-    voltage_variances = [0] * net.size
-    voltage_pvariances = [0] * net.size
-    current_variances = [0] * net.size
-    current_pvariances = [0] * net.size
-    r_0 = normal_quantile((1 + net.beta) / 2, 1)
-    for k in range(net.size):
-        node = net.nodes[k]
+    sigma_1, sigma_2 = net.compute_sigmas()
 
-        voltage_stdev = node.measured_v * net.voltage_rel_err / r_0
-        current_stdev = node.measured_i * net.current_rel_err / r_0
+    A, g = net.compute_A_and_g(z, sigma_1, sigma_2)
 
-        voltage_variances[k] = (
-            1 - normal_characteristic(net.theta_stdev, 1.0) ** 2
-        ) * node.measured_v**2 + voltage_stdev**2
-
-        current_variances[k] = (
-            1
-            - normal_characteristic(net.theta_stdev, 1.0) ** 2
-            * normal_characteristic(net.phi_stdev, 1.0) ** 2
-        ) * node.measured_i**2 + current_stdev**2
-
-        voltage_pvariances[k] = cmath.exp(2j * node.measured_theta) * (
-            (node.measured_v**2 + voltage_stdev**2)
-            * normal_characteristic(net.theta_stdev, 2.0)
-            - node.measured_v**2 * normal_characteristic(net.theta_stdev, 1.0) ** 2
-        )
-
-        current_pvariances[k] = cmath.exp(
-            2j * (node.measured_phi + node.measured_theta)
-        ) * (
-            (node.measured_i**2 + current_stdev**2)
-            * normal_characteristic(net.theta_stdev, 2.0)
-            * normal_characteristic(net.phi_stdev, 2.0)
-            - node.measured_i**2
-            * normal_characteristic(net.theta_stdev, 1.0) ** 2
-            * normal_characteristic(net.phi_stdev, 1.0) ** 2
-        )
-
-    sigma_1 = D @ np.diag(voltage_variances + current_variances) @ D.T
-    sigma_2 = D @ np.diag(voltage_pvariances + current_pvariances) @ D.T
-
-    # sigma_bar = augment_matrices(sigma_1, sigma_2)
-
-    B = np.linalg.inv(sigma_1 - sigma_2.conj() @ np.linalg.inv(sigma_1) @ sigma_2)
-    W = sigma_2 @ np.linalg.inv(sigma_1)
-
-    G1 = D.T @ B @ D
-    G2 = -D.T @ W @ B @ D
-
-    G_bar = augment_matrices(G1, G2)
-    C_bar = augment_matrix(C)
-
-    A = np.block(
-        [[G_bar, C_bar.T.conj()], [C_bar, np.zeros([C_bar.shape[0], C_bar.shape[0]])]]
-    )
-
-    A_inv = np.linalg.inv(A)
-    F11 = A_inv[: G_bar.shape[0], : G_bar.shape[1]]
-
-    g = D.T @ B @ (z - W @ z.conj())
+    F11 = net.compute_F11_matrix(A)
 
     g_bar = augment_vector(g)
 

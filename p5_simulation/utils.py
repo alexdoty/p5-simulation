@@ -17,6 +17,12 @@ def augment_matrix(mat: NDArray) -> NDArray:
 def augment_matrices(m1: NDArray, m2: NDArray) -> NDArray:
     return np.block([[m1, m2], [m2.conj(), m1.conj()]])
 
+def augment_transformation(size: int) -> NDArray:
+    return np.block([
+        [np.identity(size), 1j * np.identity(size)],
+        [np.identity(size), -1j * np.identity(size)]
+    ])
+
 
 def pretty(c: complex):
     m = max(c.real, c.imag)

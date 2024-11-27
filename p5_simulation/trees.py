@@ -3,15 +3,14 @@ import math
 from typing import Self, Optional
 from functools import cached_property
 import numpy as np
-from numpy import typing
 from numpy.typing import NDArray
 from math import pi, tau
 import cmath
 import enum
-
+from typing import Any
 
 from p5_simulation import draw
-from p5_simulation.utils import pretty, normal_quantile
+from p5_simulation.utils import pretty, normal_quantile, normal_characteristic, augment_matrices, augment_matrix
 
 SOURCE_VOLTAGE = 325.0 + 0.0j
 
@@ -38,10 +37,15 @@ class NetworkNode:
     i_impedance: Impedance | None
     meter: MeterType
 
+    measured_phi: Optional[float] = None
+    measured_theta: Optional[float] = None
+    measured_v: Optional[float] = None
+    measured_i: Optional[float] = None
+
     next_neighbor: Optional[NetworkNode] = None
     prev_neighbor: Optional[NetworkNode] = None
-    angle = 0
-    error = 0
+    angle: float = 0
+    error: float = 0
 
     def __init__(self, network, parent, meter, i_impedance) -> None:
         self.network = network
@@ -205,7 +209,6 @@ class NetworkNode:
         # print(self.index, self.angle)
 
 
-from typing import Any
 
 s = 1
 
@@ -221,11 +224,13 @@ class Network:
     voltage_rel_err: float = 0.01 * s
     current_rel_err: float = 0.03 * s
     beta: float = 0.99
+    constraint_matrix: Optional[NDArray] = None
+    metering_matrix: Optional[NDArray] = None
 
     @classmethod
     def singleton(cls) -> Self:
         net = cls()
-        root = NetworkNode(net, None, None)
+        root = NetworkNode(net, None, MeterType.PMU, None)
         root.index = 0
         net.root = root
         net.nodes = [root]
@@ -282,7 +287,14 @@ class Network:
         D = np.zeros((len(indices), self.size * 2))
         for i, index in enumerate(indices):
             D[i, index] = 1
+
+        self.metering_matrix = D
         return D
+
+    def create_C_matrix(self) -> NDArray:
+        C = self.root.all_equations()
+        self.constraint_matrix = C
+        return C
 
     def realize_measurements(self):
         import random
@@ -306,7 +318,7 @@ class Network:
             i_err = i + random.normalvariate(0.0, i_stdev)
             phi_err = phi + random.normalvariate(0.0, self.phi_stdev)
 
-            if node.meter == MeterType.PMU:
+            if node.meter != MeterType.EM:
                 theta_err = theta + random.normalvariate(0.0, self.theta_stdev)
                 node.measured_theta = theta_err
             else:
@@ -326,36 +338,168 @@ class Network:
 
         return z
 
-    def all_error_vector(self, voltage_stdev: float, current_stdev: float) -> NDArray:
-        error_v = (
-            np.random.normal(size=(self.size, 2), scale=voltage_stdev)
-            .view(np.complex128)
-            .reshape(self.size)
+    def compute_sigmas(self):
+        voltage_variances = [0.0] * self.size
+        voltage_pvariances = [0.0] * self.size
+        current_variances = [0.0] * self.size
+        current_pvariances = [0.0] * self.size
+
+        r_0 = normal_quantile((1 + self.beta) / 2, 1)
+
+        for k in range(self.size):
+            node = self.nodes[k]
+
+            voltage_stdev = node.measured_v * self.voltage_rel_err / r_0
+            current_stdev = node.measured_i * self.current_rel_err / r_0
+
+            voltage_variances[k] = (
+                1 - normal_characteristic(self.theta_stdev, 1.0) ** 2
+            ) * node.measured_v**2 + voltage_stdev**2
+
+            current_variances[k] = (
+                1
+                - normal_characteristic(self.theta_stdev, 1.0) ** 2
+                * normal_characteristic(self.phi_stdev, 1.0) ** 2
+            ) * node.measured_i**2 + current_stdev**2
+
+            voltage_pvariances[k] = cmath.exp(2j * node.measured_theta) * (
+                (node.measured_v**2 + voltage_stdev**2)
+                * normal_characteristic(self.theta_stdev, 2.0)
+                - node.measured_v**2 * normal_characteristic(self.theta_stdev, 1.0) ** 2
+            )
+
+            current_pvariances[k] = cmath.exp(
+                2j * (node.measured_phi + node.measured_theta)
+            ) * (
+                (node.measured_i**2 + current_stdev**2)
+                * normal_characteristic(self.theta_stdev, 2.0)
+                * normal_characteristic(self.phi_stdev, 2.0)
+                - node.measured_i**2
+                * normal_characteristic(self.theta_stdev, 1.0) ** 2
+                * normal_characteristic(self.phi_stdev, 1.0) ** 2
+            )
+
+        if self.metering_matrix is None:
+            D = self.create_D_matrix()
+        else:
+            D = self.metering_matrix
+
+        sigma_1 = D @ np.diag(voltage_variances + current_variances) @ D.T
+        sigma_2 = D @ np.diag(voltage_pvariances + current_pvariances) @ D.T
+
+        return (sigma_1, sigma_2)
+
+    def compute_true_sigmas(self):
+        voltage_variances = [0.0] * self.size
+        voltage_pvariances = [0.0] * self.size
+        current_variances = [0.0] * self.size
+        current_pvariances = [0.0] * self.size
+
+        r_0 = normal_quantile((1 + self.beta) / 2, 1)
+
+        for k in range(self.size):
+            node = self.nodes[k]
+
+            theta = cmath.phase(node.voltage)
+            phi = cmath.phase(node.current) - theta
+
+            voltage_stdev = abs(node.voltage) * self.voltage_rel_err / r_0
+            current_stdev = abs(node.current) * self.current_rel_err / r_0
+
+            voltage_variances[k] = (
+                1 - normal_characteristic(self.theta_stdev, 1.0) ** 2
+            ) * abs(node.voltage)**2 + voltage_stdev**2
+
+            current_variances[k] = (
+                1
+                - normal_characteristic(self.theta_stdev, 1.0) ** 2
+                * normal_characteristic(self.phi_stdev, 1.0) ** 2
+            ) * abs(node.current)**2 + current_stdev**2
+
+            voltage_pvariances[k] = cmath.exp(2j * theta) * (
+                (abs(node.voltage)**2 + voltage_stdev**2)
+                * normal_characteristic(self.theta_stdev, 2.0)
+                - abs(node.voltage)**2 * normal_characteristic(self.theta_stdev, 1.0) ** 2
+            )
+
+            current_pvariances[k] = cmath.exp(
+                2j * (phi + theta)
+            ) * (
+                (abs(node.current)**2 + current_stdev**2)
+                * normal_characteristic(self.theta_stdev, 2.0)
+                * normal_characteristic(self.phi_stdev, 2.0)
+                - abs(node.current)**2
+                * normal_characteristic(self.theta_stdev, 1.0) ** 2
+                * normal_characteristic(self.phi_stdev, 1.0) ** 2
+            )
+
+        if self.metering_matrix is None:
+            D = self.create_D_matrix()
+        else:
+            D = self.metering_matrix
+
+        sigma_1 = D @ np.diag(voltage_variances + current_variances) @ D.T
+        sigma_2 = D @ np.diag(voltage_pvariances + current_pvariances) @ D.T
+
+        return (sigma_1, sigma_2)
+
+    def compute_A_and_g(self, z, sigma_1, sigma_2) -> (NDArray, NDArray):
+        if self.metering_matrix is None:
+            D = self.create_D_matrix()
+        else:
+            D = self.metering_matrix
+
+        if self.constraint_matrix is None:
+            C = self.create_C_matrix()
+        else:
+            C = self.constraint_matrix
+
+        B = np.linalg.inv(sigma_1 - sigma_2.conj() @ np.linalg.inv(sigma_1) @ sigma_2)
+        W = sigma_2 @ np.linalg.inv(sigma_1)
+
+        G1 = D.T @ B @ D
+        G2 = -D.T @ W @ B @ D
+
+        G_bar = augment_matrices(G1, G2)
+        C_bar = augment_matrix(C)
+
+        A = np.block(
+            [[G_bar, C_bar.T.conj()], [C_bar, np.zeros([C_bar.shape[0], C_bar.shape[0]])]]
         )
-        error_i = (
-            np.random.normal(size=(self.size, 2), scale=current_stdev)
-            .view(np.complex128)
-            .reshape(self.size)
+
+        g = D.T @ B @ (z - W @ z.conj())
+
+        return (A, g)
+
+    def compute_A(self, sigma_1, sigma_2) -> NDArray:
+        if self.metering_matrix is None:
+            D = self.create_D_matrix()
+        else:
+            D = self.metering_matrix
+
+        if self.constraint_matrix is None:
+            C = self.create_C_matrix()
+        else:
+            C = self.constraint_matrix
+
+        B = np.linalg.inv(sigma_1 - sigma_2.conj() @ np.linalg.inv(sigma_1) @ sigma_2)
+        W = sigma_2 @ np.linalg.inv(sigma_1)
+
+        G1 = D.T @ B @ D
+        G2 = -D.T @ W @ B @ D
+
+        G_bar = augment_matrices(G1, G2)
+        C_bar = augment_matrix(C)
+
+        A = np.block(
+            [[G_bar, C_bar.T.conj()], [C_bar, np.zeros([C_bar.shape[0], C_bar.shape[0]])]]
         )
-        return np.concatenate((error_v, error_i))
+        return A
 
-    def compute_z_vector(
-        self,
-        D: NDArray,
-        voltage_stdev: float,
-        current_stdev: float,
-    ) -> NDArray:
-        errors = self.all_error_vector(voltage_stdev, current_stdev)
-        x = self.state_vector()
-        return D @ (x + errors)
+    def compute_F11_matrix(self, A) -> NDArray:
+        A_inv = np.linalg.inv(A)
 
-    def MLE_matrix(self, D: NDArray) -> NDArray:
-        C = self.root.all_equations()
-        return np.block([[D.T @ D, C.T], [C, np.zeros((C.shape[0], C.shape[0]))]])
-
-    def MLE_result(self, z: NDArray, D: NDArray) -> NDArray:
-        C = self.root.all_equations()
-        return np.concatenate((D.T @ z, np.zeros(C.shape[0])))
+        return A_inv[:self.size * 4, :self.size*4]
 
     def print_node_stats(self):
         for node in self.nodes:
