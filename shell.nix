@@ -1,6 +1,7 @@
 let
-  pkgs = import <nixpkgs> {};
-in pkgs.mkShell rec {
+  pkgs = import <nixpkgs> { };
+in
+pkgs.mkShell rec {
   packages = [
     pkgs.python312
     pkgs.poetry

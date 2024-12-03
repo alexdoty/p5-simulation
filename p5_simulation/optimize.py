@@ -3,13 +3,25 @@ import numpy as np
 from p5_simulation.utils import augment_matrices, augment_matrix, augment_transformation
 from p5_simulation.trees import MeterType, Network
 
-def solve(net: Network, k: int) -> tuple[Network, list[int]]:
+def setup(net: Network, k: int) -> list[int]:
     assert k <= 2 * net.size, "k must be less than or equal to the sum of nodes and edges!"
     locations = list(range(0, net.size * 2))
 
     # Ensure each node has a PMU
     for node in net.nodes:
         node.meter = MeterType.PMU
+
+    return locations
+
+
+def greedy_solve(net: Network, k: int) -> tuple[Network, list[int]]:
+    locations = setup(net, k)
+    # assert k <= 2 * net.size, "k must be less than or equal to the sum of nodes and edges!"
+    # locations = list(range(0, net.size * 2))
+
+    # # Ensure each node has a PMU
+    # for node in net.nodes:
+    #     node.meter = MeterType.PMU
 
     # Compute H, multiply by T^(-1) on the left and T on the right and get the diagonal entries
     # Find the index with the smallest value
@@ -71,3 +83,6 @@ def solve(net: Network, k: int) -> tuple[Network, list[int]]:
         num_locs -= 1
 
     return net, locations
+
+def better_solve(net: Network) -> tuple[Network, list[int]]:
+    return (Network(), [2, 3])

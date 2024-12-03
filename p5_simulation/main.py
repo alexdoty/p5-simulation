@@ -8,7 +8,7 @@ from p5_simulation.utils import (
     normal_characteristic,
     normal_quantile,
 )
-from p5_simulation.optimize import solve
+from p5_simulation.optimize import greedy_solve
 import cmath
 import scipy
 import math
@@ -91,7 +91,7 @@ def main():
 
     net.print_node_stats()
 
-    new_net, locs = solve(net,6)
+    new_net, locs = greedy_solve(net,6)
 
     print("1-indexed locations", [i + 1 for i in locs])
 
