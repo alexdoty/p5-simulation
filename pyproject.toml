@@ -10,6 +10,7 @@ packages = [{ include = "p5_simulation" }]
 python = "^3.12"
 numpy = "^2.0.2"
 pygame = "^2.6.1"
+pandas = "^2.2.3"
 
 [tool.poetry.scripts]
 project = "p5_simulation.main:main"
