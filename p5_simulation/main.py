@@ -13,7 +13,6 @@ import cmath
 import scipy
 import math
 
-
 def main():
     EM = MeterType.EM
     PMU = MeterType.PMU
@@ -91,9 +90,9 @@ def main():
 
     net.print_node_stats()
 
-    new_net, locs = greedy_solve(net,6)
+    new_net, locs = greedy_solve(net, 1)
 
-    print("1-indexed locations", [i + 1 for i in locs])
+    print("1-indexed locations:", [i + 1 for i in locs])
 
     return
 
