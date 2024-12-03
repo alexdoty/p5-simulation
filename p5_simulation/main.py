@@ -199,3 +199,6 @@ def main():
     #     residuals += np.linalg.norm(x_hat - net.root.state_vector())
 
     # print(residuals / 100)
+
+if __name__ == "__main__":
+    main()
