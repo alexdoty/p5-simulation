@@ -9,10 +9,18 @@ from p5_simulation.utils import (
     normal_characteristic,
     normal_quantile,
 )
-from p5_simulation.optimize import anneeling_solve, assessment_metric, compute_projmat_and_leverages, greedy_solve
+from p5_simulation.optimize import greedy_solve
+from p5_simulation.parser import network_from_file, measurements_from_file
+from p5_simulation.optimize import (
+    anneeling_solve,
+    assessment_metric,
+    compute_projmat_and_leverages,
+    greedy_solve,
+)
 import cmath
 import scipy
 import math
+
 
 def main():
     EM = MeterType.EM
@@ -25,55 +33,51 @@ def main():
             # [2,4, 30, 1000],
             # [2,5, 30, 1000],
             # [2,6, 30, 1000],
-            # [0, 1, EM, 40 + 40j],
-            # [0, 2, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [0, 3, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [0, 11, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [0, 12, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [0, 13, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [1, 4, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [1, 5, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [2, 6, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [2, 7, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [3, 8, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [3, 9, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [3, 10, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [11, 14, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [11, 15, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [11, 16, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [12, 17, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [12, 18, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [12, 19, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [12, 20, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [12, 21, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
-            # [12, 22, MeterType.NONE, 5.694 + 40j, 2_000 + 1_000j],
-
+            [0, 1, PMU, 40 + 40j],
+            [0, 2, PMU, 50 + 40j, 2_000 + 1_000j],
+            [0, 3, PMU, 50 + 40j, 2_000 + 1_000j],
+            [0, 11, PMU, 50 + 40j, 2_000 + 1_000j],
+            [0, 12, PMU, 50 + 40j, 2_000 + 1_000j],
+            [0, 13, PMU, 50 + 40j, 2_000 + 1_000j],
+            [1, 4, PMU, 50 + 40j, 2_000 + 1_000j],
+            [1, 5, PMU, 50 + 40j, 2_000 + 1_000j],
+            [2, 6, PMU, 50 + 40j, 2_000 + 1_000j],
+            [2, 7, PMU, 50 + 40j, 2_000 + 1_000j],
+            [3, 8, PMU, 50 + 40j, 2_000 + 1_000j],
+            [3, 9, MeterType.NONE, 50 + 40j, 2_000 + 1_000j],
+            [3, 10, PMU, 50 + 40j, 2_000 + 1_000j],
+            [11, 14, PMU, 50 + 40j, 2_000 + 1_000j],
+            [11, 15, PMU, 50 + 40j, 2_000 + 1_000j],
+            [11, 16, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 17, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 18, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 19, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 20, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 21, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 22, PMU, 5.694 + 40j, 2_000 + 1_000j],
             # [0, 1, MeterType.NONE, 31 + 2j],
             # [1, 2, PMU, 20 + 5j, 1_000 + 500j],
             # [1, 3, MeterType.NONE, 12 + 3j, 1_000 + 500j],
-
             # [0, 1, PMU, 12 + 3j, 1_000 + 600j],
             # [0, 2, PMU, 4 + 1j, 1_500 + 300j],
             # [1, 3, PMU, 5 + 2j, 2_000 + 400j],
             # [1, 4, PMU, 9 + 3j, 800 + 100j]
-
             # [1, 3, EM, 50 + 60j, 2_000 + 3_000j],
             # [1, 4, EM, 50 + 30j, 2_000 + 2_000j],
             # [1, 5, EM, 50 + 30j, 2_000 + 2_000j],
-
-            [0, 1, PMU, 10 + 10j, 1000 + 1000j],
-            [0, 2, PMU, 5 + 10j, 1000 + 1000j],
-            [0, 3, PMU, 10 + 10j, 1000 + 1000j],
-            [0, 4, PMU, 10 + 20j, 2000 + 1000j],
-            [0, 5, PMU, 10 + 10j, 3000 + 1000j],
-            [0, 6, PMU, 10 + 10j, 5000 + 1000j],
-            [0, 7, PMU, 10 + 30j, 500 + 1000j],
-            [0, 8, PMU, 10 + 10j, 1000 + 4000j],
-            [0, 9, PMU, 10 + 10j, 1000 + 2000j],
-            [0, 10, PMU, 40 + 10j, 1000 + 1000j],
-            [0, 11, PMU, 10 + 10j, 1000 + 9000j],
-            [0, 12, PMU, 10 + 10j, 1000 + 1000j],
-
+            # [0, 1, PMU, 10 + 10j, 1000 + 1000j],
+            # [0, 2, PMU, 5 + 10j, 1000 + 1000j],
+            # [0, 3, PMU, 10 + 10j, 1000 + 1000j],
+            # [0, 4, PMU, 10 + 20j, 2000 + 1000j],
+            # [0, 5, PMU, 10 + 10j, 3000 + 1000j],
+            # [0, 6, PMU, 10 + 10j, 5000 + 1000j],
+            # [0, 7, PMU, 10 + 30j, 500 + 1000j],
+            # [0, 8, PMU, 10 + 10j, 1000 + 4000j],
+            # [0, 9, PMU, 10 + 10j, 1000 + 2000j],
+            # [0, 10, PMU, 40 + 10j, 1000 + 1000j],
+            # [0, 11, PMU, 10 + 10j, 1000 + 9000j],
+            # [0, 12, PMU, 10 + 10j, 1000 + 1000j],
+            #
             # [0,1, EM, 30+3j],
             # [1,2, EM, 50+3j, 10_000+100j],
             # [1,3, PMU, 40+3j],
@@ -90,22 +94,59 @@ def main():
         ]
     )
     # net.set_angles()
-
+    # net = network_from_file("p5_simulation/data/topology.txt")
+    # measurements = measurements_from_file("p5_simulation/data/measurements.xlsx")
+    # _, x_df = next(measurements)
+    # x_df.sort_index(inplace=True)
+    # node_indices = list(x_df.index)
+    # node_indices.sort()
+    # x_indices = list(x_df.index) + list(x_df.index + net.size)
 
     net.print_node_stats()
-    net_cp = deepcopy(net)
 
-    new_net, locs = anneeling_solve(net, 2)
-    print("1-indexed locations (anneeling):", [i + 1 for i in locs], "Assessment:", assessment_metric(net, new_net))
+    new_net, locs = anneeling_solve(deepcopy(net), 7)
+    print(
+        "1-indexed locations (anneeling):",
+        [i + 1 for i in locs],
+        "Assessment:",
+        assessment_metric(net, new_net),
+    )
+    new_cp_net, locs2 = greedy_solve(deepcopy(net), 7)
+    print(
+        "1-indexed locations (greedy):",
+        [i + 1 for i in locs2],
+        "Assessment:",
+        assessment_metric(net, new_cp_net),
+    )
 
-    new_cp_net, locs2 = greedy_solve(net_cp, 2)
-    print("1-indexed locations (greedy):", [i + 1 for i in locs2], "Assessment:", assessment_metric(net_cp, new_cp_net))
+    # print(x_indices)
+    # net.set_meters(node_indices, MeterType.EM)
+
+    # z = x_df.loc[node_indices].to_numpy().T.reshape(-1, 1)
+    # D = net.create_D_matrix()
+    # C = net.create_C_matrix()
+
+    # x_measured = np.zeros(2 * net.size, dtype=complex).reshape(-1, 1)
+    # x_measured[x_indices] = z
+
+    # print(z)
+    # print(D)
+    # print(C)
+    # print("test")
+    # print(x_measured)
+
+    # mask = np.ones_like(C, dtype=bool)
+    # mask[:, x_indices] = False
+    # print(C[np.all(C[mask].reshape(C.shape[0], -1) == 0, axis=1)].shape)
+    # print(C.shape)
+
+    # net.print_node_stats()
+
+    # new_net, locs = greedy_solve(net,6)
+
+    # print("1-indexed locations", [i + 1 for i in locs])
 
     return
-
-    D = net.create_D_matrix()
-
-    _ = net.create_C_matrix()
 
     x = net.state_vector()
     z = D @ net.realize_measurements()
@@ -205,6 +246,7 @@ def main():
     #     residuals += np.linalg.norm(x_hat - net.root.state_vector())
 
     # print(residuals / 100)
+
 
 if __name__ == "__main__":
     main()

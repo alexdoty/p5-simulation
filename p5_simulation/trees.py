@@ -10,7 +10,13 @@ import enum
 from typing import Any
 
 from p5_simulation import draw
-from p5_simulation.utils import pretty, normal_quantile, normal_characteristic, augment_matrices, augment_matrix
+from p5_simulation.utils import (
+    pretty,
+    normal_quantile,
+    normal_characteristic,
+    augment_matrices,
+    augment_matrix,
+)
 
 SOURCE_VOLTAGE = 325.0 + 0.0j
 
@@ -395,6 +401,10 @@ class Network:
 
         return (sigma_1, sigma_2)
 
+    def set_meters(self, indices: list[int], meterType: MeterType):
+        for i in indices:
+            self.nodes[i].meter = meterType
+
     def compute_true_sigmas(self):
         voltage_variances = [0.0] * self.size
         voltage_pvariances = [0.0] * self.size
@@ -414,27 +424,26 @@ class Network:
 
             voltage_variances[k] = (
                 1 - normal_characteristic(self.theta_stdev, 1.0) ** 2
-            ) * abs(node.voltage)**2 + voltage_stdev**2
+            ) * abs(node.voltage) ** 2 + voltage_stdev**2
 
             current_variances[k] = (
                 1
                 - normal_characteristic(self.theta_stdev, 1.0) ** 2
                 * normal_characteristic(self.phi_stdev, 1.0) ** 2
-            ) * abs(node.current)**2 + current_stdev**2
+            ) * abs(node.current) ** 2 + current_stdev**2
 
             voltage_pvariances[k] = cmath.exp(2j * theta) * (
-                (abs(node.voltage)**2 + voltage_stdev**2)
+                (abs(node.voltage) ** 2 + voltage_stdev**2)
                 * normal_characteristic(self.theta_stdev, 2.0)
-                - abs(node.voltage)**2 * normal_characteristic(self.theta_stdev, 1.0) ** 2
+                - abs(node.voltage) ** 2
+                * normal_characteristic(self.theta_stdev, 1.0) ** 2
             )
 
-            current_pvariances[k] = cmath.exp(
-                2j * (phi + theta)
-            ) * (
-                (abs(node.current)**2 + current_stdev**2)
+            current_pvariances[k] = cmath.exp(2j * (phi + theta)) * (
+                (abs(node.current) ** 2 + current_stdev**2)
                 * normal_characteristic(self.theta_stdev, 2.0)
                 * normal_characteristic(self.phi_stdev, 2.0)
-                - abs(node.current)**2
+                - abs(node.current) ** 2
                 * normal_characteristic(self.theta_stdev, 1.0) ** 2
                 * normal_characteristic(self.phi_stdev, 1.0) ** 2
             )
@@ -470,7 +479,10 @@ class Network:
         C_bar = augment_matrix(C)
 
         A = np.block(
-            [[G_bar, C_bar.T.conj()], [C_bar, np.zeros([C_bar.shape[0], C_bar.shape[0]])]]
+            [
+                [G_bar, C_bar.T.conj()],
+                [C_bar, np.zeros([C_bar.shape[0], C_bar.shape[0]])],
+            ]
         )
 
         g = D.T @ B @ (z - W @ z.conj())
@@ -498,14 +510,17 @@ class Network:
         C_bar = augment_matrix(C)
 
         A = np.block(
-            [[G_bar, C_bar.T.conj()], [C_bar, np.zeros([C_bar.shape[0], C_bar.shape[0]])]]
+            [
+                [G_bar, C_bar.T.conj()],
+                [C_bar, np.zeros([C_bar.shape[0], C_bar.shape[0]])],
+            ]
         )
         return A
 
     def compute_F11_matrix(self, A) -> NDArray:
         A_inv = np.linalg.inv(A)
 
-        return A_inv[:self.size * 4, :self.size*4]
+        return A_inv[: self.size * 4, : self.size * 4]
 
     def print_node_stats(self):
         for node in self.nodes:
