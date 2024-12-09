@@ -1,6 +1,6 @@
 from __future__ import annotations
 import math
-from typing import Self, Optional
+from typing import Iterable, Self, Optional
 from functools import cached_property
 import numpy as np
 from numpy.typing import NDArray
@@ -36,6 +36,7 @@ class NetworkNode:
     children: list[tuple[NetworkNode, Impedance]]
     i_impedance: Impedance | None
     meter: MeterType
+    index: int
 
     measured_phi: Optional[float] = None
     measured_theta: Optional[float] = None
@@ -208,10 +209,8 @@ class NetworkNode:
         self.angle %= tau
         # print(self.index, self.angle)
 
-
-
+# Global thing
 s = 1
-
 
 class Network:
     size: int
@@ -264,6 +263,13 @@ class Network:
         net.size = len(nodes)
 
         return net
+
+    def set_meters_anneeling(self, locs: Iterable[int]):
+        for node in self.nodes:
+            if node.index in locs:
+                node.meter = MeterType.PMU
+            else:
+                node.meter = MeterType.NONE
 
     def state_vector(self) -> NDArray:
         state = np.zeros(self.size * 2, dtype=complex)

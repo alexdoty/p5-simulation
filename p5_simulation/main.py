@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numpy as np
 from p5_simulation.trees import Network, MeterType
 from p5_simulation.utils import (
@@ -8,7 +9,7 @@ from p5_simulation.utils import (
     normal_characteristic,
     normal_quantile,
 )
-from p5_simulation.optimize import greedy_solve
+from p5_simulation.optimize import anneeling_solve, assessment_metric, compute_projmat_and_leverages, greedy_solve
 import cmath
 import scipy
 import math
@@ -51,25 +52,28 @@ def main():
             # [1, 2, PMU, 20 + 5j, 1_000 + 500j],
             # [1, 3, MeterType.NONE, 12 + 3j, 1_000 + 500j],
 
-            [0, 1, PMU, 12 + 3j, 1_000 + 600j],
-            [0, 2, PMU, 4 + 1j, 1_500 + 300j],
-            [1, 3, PMU, 5 + 2j, 2_000 + 400j],
-            [1, 4, PMU, 9 + 3j, 800 + 100j]
+            # [0, 1, PMU, 12 + 3j, 1_000 + 600j],
+            # [0, 2, PMU, 4 + 1j, 1_500 + 300j],
+            # [1, 3, PMU, 5 + 2j, 2_000 + 400j],
+            # [1, 4, PMU, 9 + 3j, 800 + 100j]
+
             # [1, 3, EM, 50 + 60j, 2_000 + 3_000j],
             # [1, 4, EM, 50 + 30j, 2_000 + 2_000j],
             # [1, 5, EM, 50 + 30j, 2_000 + 2_000j],
-            # [0, 1, 10 + 10j, 1000 + 1000j],
-            # [0, 2, 5 + 10j, 1000 + 1000j],
-            # [0, 3, 10 + 10j, 1000 + 1000j],
-            # [0, 4, 10 + 20j, 2000 + 1000j],
-            # [0, 5, 10 + 10j, 3000 + 1000j],
-            # [0, 6, 10 + 10j, 5000 + 1000j],
-            # [0, 7, 10 + 30j, 500 + 1000j],
-            # [0, 8, 10 + 10j, 1000 + 4000j],
-            # [0, 9, 10 + 10j, 1000 + 2000j],
-            # [0, 10, 40 + 10j, 1000 + 1000j],
-            # [0, 11, 10 + 10j, 1000 + 9000j],
-            # [0, 12, 10 + 10j, 1000 + 1000j],
+
+            [0, 1, PMU, 10 + 10j, 1000 + 1000j],
+            [0, 2, PMU, 5 + 10j, 1000 + 1000j],
+            [0, 3, PMU, 10 + 10j, 1000 + 1000j],
+            [0, 4, PMU, 10 + 20j, 2000 + 1000j],
+            [0, 5, PMU, 10 + 10j, 3000 + 1000j],
+            [0, 6, PMU, 10 + 10j, 5000 + 1000j],
+            [0, 7, PMU, 10 + 30j, 500 + 1000j],
+            [0, 8, PMU, 10 + 10j, 1000 + 4000j],
+            [0, 9, PMU, 10 + 10j, 1000 + 2000j],
+            [0, 10, PMU, 40 + 10j, 1000 + 1000j],
+            [0, 11, PMU, 10 + 10j, 1000 + 9000j],
+            [0, 12, PMU, 10 + 10j, 1000 + 1000j],
+
             # [0,1, EM, 30+3j],
             # [1,2, EM, 50+3j, 10_000+100j],
             # [1,3, PMU, 40+3j],
@@ -89,10 +93,13 @@ def main():
 
 
     net.print_node_stats()
+    net_cp = deepcopy(net)
 
-    new_net, locs = greedy_solve(net, 1)
+    new_net, locs = anneeling_solve(net, 2)
+    print("1-indexed locations (anneeling):", [i + 1 for i in locs], "Assessment:", assessment_metric(net, new_net))
 
-    print("1-indexed locations:", [i + 1 for i in locs])
+    new_cp_net, locs2 = greedy_solve(net_cp, 2)
+    print("1-indexed locations (greedy):", [i + 1 for i in locs2], "Assessment:", assessment_metric(net_cp, new_cp_net))
 
     return
 
