@@ -12,6 +12,7 @@ numpy = "^2.0.2"
 pygame = "^2.6.1"
 pandas = "^2.2.3"
 scipy = "^1.14.1"
+sortedcontainers = "^2.4.0"
 
 [tool.poetry.scripts]
 project = "p5_simulation.main:main"

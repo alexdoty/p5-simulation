@@ -1,5 +1,6 @@
+from math import comb, exp
 
-from math import comb
+from numpy.ma.core import choose
 from numpy.typing import NDArray
 import numpy as np
 from random import choice, randint, random
@@ -7,12 +8,21 @@ from p5_simulation.utils import augment_matrices, augment_matrix, augment_transf
 from p5_simulation.trees import MeterType, Network, NetworkNode
 from queue import Queue
 from copy import deepcopy
+from sortedcontainers import sortedset, SortedSet
 
-EPS = 1e-1
+EPS = 2e-2
+
 
 # Returns max distance depending on temperature
 def smoothing_function(x: float, smooth: float, max: int) -> float:
-    return abs((max * 1/(np.pi/2) * np.atan(1/smooth * x)))
+    return abs((max * 1 / (np.pi / 2) * np.atan(1 / smooth * x)))
+
+
+def acceptance_probability(a, b, temp):
+    if b > a:
+        return 1
+    return exp(-(a - b).real / temp)
+
 
 def setup(net: Network, k: int) -> list[int]:
     assert k <= net.size, "k must be less than or equal to the sum of nodes and edges!"
@@ -24,6 +34,7 @@ def setup(net: Network, k: int) -> list[int]:
 
     return locations
 
+
 def remove_meter(net: Network, loc: int):
     size = net.size
     if loc < size:
@@ -32,10 +43,12 @@ def remove_meter(net: Network, loc: int):
         loc -= size
         net.nodes[loc].meter = MeterType.NONE
 
+
 def compare_configurations(c1: int, c2: int) -> bool:
     if abs(c1 - c2) < 0.25:
         return True
     return False
+
 
 def compute_projmat_and_leverages(net: Network) -> tuple[NDArray, list[float], bool]:
     inv = True
@@ -51,22 +64,36 @@ def compute_projmat_and_leverages(net: Network) -> tuple[NDArray, list[float], b
     F11 = net.compute_F11_matrix(A)
     B = np.linalg.inv(S1 - S2.conjugate() @ np.linalg.inv(S1) @ S2)
     W = S2 @ np.linalg.inv(S1.conjugate())
-    J_aug = augment_matrices(
-       D.T @ B,
-       -D.T @ B @ W
-    )
+    J_aug = augment_matrices(D.T @ B, -D.T @ B @ W)
     D_aug = augment_matrix(D)
     H = D_aug @ F11 @ J_aug
 
     T = augment_transformation(D.shape[0])
     H_real = np.linalg.inv(T) @ H @ T
 
-    s = (H_real.shape[1] // 4)
+    s = H_real.shape[1] // 4
     leverages: list[float] = [0] * s
     for i in range(0, s):
-        leverages[i] = max(H_real[i, i] + H_real[i + 2 * s, i + 2 * s], H_real[i + s, i + s] + H_real[i + 3 * s, i + 3 * s])
+        leverages[i] = (
+            2
+            if max(
+                H_real[i, i],
+                H_real[i + 2 * s, i + 2 * s],
+                H_real[i + s, i + s],
+                H_real[i + 3 * s, i + 3 * s],
+            )
+            >= 1 - EPS
+            else (
+                H_real[i, i]
+                + H_real[i + 2 * s, i + 2 * s]
+                + H_real[i + s, i + s]
+                + H_real[i + 3 * s, i + 3 * s]
+            )
+            / 2
+        )
 
     return H_real, leverages, inv
+
 
 def compute_F11(net: Network) -> NDArray:
     D = net.create_D_matrix()
@@ -75,10 +102,56 @@ def compute_F11(net: Network) -> NDArray:
     F11 = net.compute_F11_matrix(A)
     return F11
 
+
 def assessment_metric(old: Network, new: Network) -> float:
     old_F11 = compute_F11(old)
     new_F11 = compute_F11(new)
-    return 1/(4 * new.size) * np.linalg.trace(new_F11 / old_F11).real
+    return 1 / (4 * new.size) * np.linalg.trace(new_F11 / old_F11).real
+
+
+def test_annealing(net: Network, k: int) -> tuple[Network, list[int]]:
+    measurables = SortedSet()
+    for node in net.nodes:
+        if node.meter == MeterType.PMU:
+            measurables.add(node.index)
+
+    net, positions = greedy_solve(net, k)
+    measured = SortedSet(positions)
+    temp = 1
+    i = 1
+    while temp > 0:
+        if i % 100 == 0:
+            print(f"iteration: {i}")
+        i += 1
+
+        unmeasured = measurables - measured
+        node_a = choice(measured)
+        node_b = choice(unmeasured)
+
+        r = random()
+
+        net.nodes[node_b].meter = MeterType.PMU
+        measured.add(node_b)
+
+        _, leverages, inv = compute_projmat_and_leverages(net)
+
+        if (
+            acceptance_probability(
+                leverages[measured.index(node_a)],
+                leverages[measured.index(node_b)],
+                temp,
+            )
+            > r
+            and leverages[measured.index(node_a)].real < 2
+        ):
+            measured.remove(node_a)
+            net.nodes[node_a].meter = MeterType.NONE
+        else:
+            measured.remove(node_b)
+            net.nodes[node_b].meter = MeterType.NONE
+        temp -= 1e-3
+    return net, list(measured)
+
 
 def anneeling_solve(net: Network, k: int) -> tuple[Network, list[int]]:
     temp = 1
@@ -88,7 +161,7 @@ def anneeling_solve(net: Network, k: int) -> tuple[Network, list[int]]:
     possible_location: int = 0
 
     bincoef = comb(len(initial_locations), level)
-    dt = -1/(np.log(bincoef) * 100)
+    dt = -1 / (np.log(bincoef) * 100)
 
     i = 0
     while temp > 0:
@@ -112,14 +185,17 @@ def anneeling_solve(net: Network, k: int) -> tuple[Network, list[int]]:
             net.set_meters_anneeling(union_locations)
             _, leverages, inv = compute_projmat_and_leverages(net)
 
-            if leverages[sorted_locs.index(possible_location)] >= 2 - EPS:
+            if leverages[sorted_locs.index(possible_location)] == 2:
                 continue
 
-            if leverages[sorted_locs.index(possible_location)] < leverages[sorted_locs.index(not_metered_location)]:
+            if (
+                leverages[sorted_locs.index(possible_location)]
+                > leverages[sorted_locs.index(not_metered_location)]
+            ):
                 if temp > 0.5:
                     r2 += 0.02
                     pass
-                if r2 > 0.9999:
+                if r2 > 0.99:
                     print(f"Swapping at iteration {i} with worse leverage!")
                     locations.add(not_metered_location)
                     locations.remove(possible_location)
@@ -127,7 +203,7 @@ def anneeling_solve(net: Network, k: int) -> tuple[Network, list[int]]:
                 locations.add(not_metered_location)
                 locations.remove(possible_location)
         else:
-            if level == k+1:
+            if level == k + 1:
                 continue
             print(f"New level at iteration {i}!")
             _, leverages, inv = compute_projmat_and_leverages(net)
@@ -146,11 +222,12 @@ def anneeling_solve(net: Network, k: int) -> tuple[Network, list[int]]:
 
             # Update bincoef and dt
             bincoef = comb(len(initial_locations), level)
-            dt = -1/(np.log(bincoef) * 100)
+            dt = -1 / (np.log(bincoef) * 100)
             temp = 1
 
     net.set_meters_anneeling(locations)
     return net, sorted(list(locations))
+
 
 def test_solve(net: Network, k: int, t: int = 20) -> list[int]:
     # Controls the probability of moving far away from good states.
@@ -193,15 +270,16 @@ def test_solve(net: Network, k: int, t: int = 20) -> list[int]:
         if len(state) > level:
             raise ValueError("State has too many elements!")
 
-        r = 1/k * random()
+        r = 1 / k * random()
         temp = smoothing_function(temp - r, 10, k)
-        if level <= k and temp < t/(level**2):
+        if level <= k and temp < t / (level**2):
             level += 1
             continue
 
         proj, leverages, val = compute_projmat_and_leverages(net)
 
     return locations
+
 
 def greedy_solve(net: Network, k: int) -> tuple[Network, list[int]]:
     # Setup the network and the connections
@@ -232,6 +310,7 @@ def greedy_solve(net: Network, k: int) -> tuple[Network, list[int]]:
 
     return net, locations
 
+
 def greedy_solve_old(net: Network, k: int) -> tuple[Network, list[int]]:
     # Setup the network and the connections
     locations = setup(net, k)
@@ -249,10 +328,7 @@ def greedy_solve_old(net: Network, k: int) -> tuple[Network, list[int]]:
         F11 = net.compute_F11_matrix(A)
         B = np.linalg.inv(S1 - S2.conjugate() @ np.linalg.inv(S1) @ S2)
         W = S2 @ np.linalg.inv(S1.conjugate())
-        J_aug = augment_matrices(
-           D.T @ B,
-           -D.T @ B @ W
-        )
+        J_aug = augment_matrices(D.T @ B, -D.T @ B @ W)
         D_aug = augment_matrix(D)
         H = D_aug @ F11 @ J_aug
 
@@ -261,9 +337,9 @@ def greedy_solve_old(net: Network, k: int) -> tuple[Network, list[int]]:
 
         # Get arg min of leverages
         loc = 0
-        lowest = H_real[0,0] + H_real[num_locs,num_locs]
+        lowest = H_real[0, 0] + H_real[num_locs, num_locs]
         for j in range(1, H_real.shape[1] // 2):
-            if H_real[j, j] + H_real[j+num_locs, j+num_locs] < lowest:
+            if H_real[j, j] + H_real[j + num_locs, j + num_locs] < lowest:
                 loc = j
 
         if loc >= num_locs:

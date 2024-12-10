@@ -16,6 +16,7 @@ from p5_simulation.optimize import (
     assessment_metric,
     compute_projmat_and_leverages,
     greedy_solve,
+    test_annealing,
 )
 import cmath
 import scipy
@@ -33,42 +34,39 @@ def main():
             # [2,4, 30, 1000],
             # [2,5, 30, 1000],
             # [2,6, 30, 1000],
-
-            # [0, 1, PMU, 40 + 40j],
-            # [0, 2, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [0, 3, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [0, 11, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [0, 12, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [0, 13, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [1, 4, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [1, 5, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [2, 6, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [2, 7, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [3, 8, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [3, 9, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [3, 10, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [11, 14, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [11, 15, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [11, 16, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [12, 17, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [12, 18, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [12, 19, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [12, 20, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [12, 21, PMU, 50 + 40j, 2_000 + 1_000j],
-            # [12, 22, PMU, 5.694 + 40j, 2_000 + 1_000j],
-
+            [0, 1, PMU, 40 + 40j],
+            [0, 2, PMU, 50 + 40j, 2_000 + 1_000j],
+            [0, 3, PMU, 50 + 40j, 2_000 + 1_000j],
+            [0, 11, PMU, 50 + 40j, 2_000 + 1_000j],
+            [0, 12, PMU, 50 + 40j, 2_000 + 1_000j],
+            [0, 13, PMU, 50 + 40j, 2_000 + 1_000j],
+            [1, 4, PMU, 50 + 40j, 2_000 + 1_000j],
+            [1, 5, PMU, 50 + 40j, 2_000 + 1_000j],
+            [2, 6, PMU, 50 + 40j, 2_000 + 1_000j],
+            [2, 7, PMU, 50 + 40j, 2_000 + 1_000j],
+            [3, 8, PMU, 50 + 40j, 2_000 + 1_000j],
+            [3, 9, PMU, 50 + 40j, 2_000 + 1_000j],
+            [3, 10, PMU, 50 + 40j, 2_000 + 1_000j],
+            [11, 14, PMU, 50 + 40j, 2_000 + 1_000j],
+            [11, 15, PMU, 50 + 40j, 2_000 + 1_000j],
+            [11, 16, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 17, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 18, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 19, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 20, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 21, PMU, 50 + 40j, 2_000 + 1_000j],
+            [12, 22, PMU, 5.694 + 40j, 2_000 + 1_000j],
             # [0, 1, PMU, 31 + 2j],
             # [1, 2, PMU, 20 + 5j, 1_000 + 500j],
             # [1, 3, PMU, 12 + 3j, 1_000 + 500j]
-
-            [0, 1, PMU, 12 + 3j, 1_000 + 600j],
-            [0, 2, PMU, 4 + 1j, 1_500 + 300j],
-            [1, 3, PMU, 5 + 2j, 2_000 + 400j],
-            [1, 4, PMU, 9 + 3j, 800 + 100j],
-            [1, 5, PMU, 50 + 30j, 2_000 + 2_000j],
+            # [0, 1, PMU, 12 + 3j, 1_000 + 600j],
+            # [0, 2, PMU, 4 + 1j, 1_500 + 300j],
+            # [1, 3, PMU, 5 + 2j, 2_000 + 400j],
+            # [1, 4, PMU, 9 + 3j, 800 + 100j],
+            # [1, 5, PMU, 50 + 30j, 2_000 + 2_000j],
+            #
             # [1, 3, PMU, 50 + 60j, 2_000 + 3_000j],
             # [1, 4, PMU, 50 + 30j, 2_000 + 2_000j],
-
             # [0, 1, PMU, 10 + 10j, 1000 + 1000j],
             # [0, 2, PMU, 5 + 10j, 1000 + 1000j],
             # [0, 3, PMU, 10 + 10j, 1000 + 1000j],
@@ -81,7 +79,6 @@ def main():
             # [0, 10, PMU, 40 + 10j, 1000 + 1000j],
             # [0, 11, PMU, 10 + 10j, 1000 + 9000j],
             # [0, 12, PMU, 10 + 10j, 1000 + 1000j],
-
             # [0,1, EM, 30+3j],
             # [1,2, EM, 50+3j, 10_000+100j],
             # [1,3, PMU, 40+3j],
@@ -108,25 +105,27 @@ def main():
 
     net.print_node_stats()
     average_ass: float = 0.0
-    new_net, locs = anneeling_solve(deepcopy(net), 3)
+    new_net, locs = anneeling_solve(deepcopy(net), 6)
     # for _ in range(0, 100):
-        # new_net, locs = anneeling_solve(deepcopy(net), 5)
-        # ass = assessment_metric(net, new_net)
-        # average_ass += ass
-        # print(
-        #     "1-indexed locations (anneeling):",
-        #     [i + 1 for i in locs],
-        #     "Assessment:",
-        #     assessment_metric(net, new_net),
-        # )
+    # new_net, locs = anneeling_solve(deepcopy(net), 5)
+    # ass = assessment_metric(net, new_net)
+    # average_ass += ass
+    # print(
+    #     "1-indexed locations (anneeling):",
+    #     [i + 1 for i in locs],
+    #     "Assessment:",
+    #     assessment_metric(net, new_net),
+    # )
     # average_ass /= 100
+
     print(
         "1-indexed locations (anneeling):",
         [i + 1 for i in locs],
         "Average assessment:",
-        assessment_metric(net, new_net)
+        assessment_metric(net, new_net),
     )
-    new_cp_net, locs2 = greedy_solve(deepcopy(net), 3)
+
+    new_cp_net, locs2 = greedy_solve(deepcopy(net), 6)
     print(
         "1-indexed locations (greedy):",
         [i + 1 for i in locs2],
@@ -134,6 +133,13 @@ def main():
         assessment_metric(net, new_cp_net),
     )
 
+    net_test, locs3 = test_annealing(deepcopy(net), 6)
+    print(
+        "1-indexed locations (test):",
+        [i + 1 for i in locs3],
+        "Assessment:",
+        assessment_metric(net, net_test),
+    )
     # print(x_indices)
     # net.set_meters(node_indices, MeterType.EM)
 
