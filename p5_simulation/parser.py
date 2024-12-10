@@ -1,5 +1,8 @@
 from p5_simulation.trees import Network, MeterType
 import csv
+import warnings
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
 import pandas as pd
 from math import sqrt
 
@@ -17,7 +20,9 @@ def network_from_file(file, default_meter_type=MeterType.NONE) -> Network:
             ]
             for row in raw
         ]
-    return Network.from_connections(connections)
+
+        net = Network.from_connections(connections)
+    return net
 
 
 def compute_impedence(length, cable_type) -> complex:
@@ -94,7 +99,7 @@ def measurements_from_file(file):
     raw["Current"] = (raw["Active Power"] + raw["Reactive Power"] * 1j) / raw["Voltage"]
 
     selected_data = raw[["ID", "timestamp", "Voltage", "Current"]]
-    for time, data in selected_data.groupby(["timestamp"], sort=False):
+    for time, data in selected_data.groupby(["timestamp"]):
         yield time, data[["ID", "Voltage", "Current"]].set_index("ID")
 
 

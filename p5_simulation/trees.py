@@ -215,13 +215,16 @@ class NetworkNode:
         self.angle %= tau
         # print(self.index, self.angle)
 
+
 # Global thing
 s = 1
+
 
 class Network:
     size: int
     root: NetworkNode
     nodes: list[NetworkNode]
+    id_map: list[int]
 
     source_voltage: Voltage = 325.0 + 0.0j
     theta_stdev: float = 0.003 * s
@@ -251,17 +254,20 @@ class Network:
         root.index = 0
         nodes = [None] * (len(cons) + 1)
         nodes[0] = root
+        net.id_map = [0]
 
-        for con in cons:
-            parent = nodes[con[0]]
+        for i, con in enumerate(cons):
+            parent = nodes[net.id_map.index(con[0])]
             if parent is None:
                 raise Exception(f"Parent {con[0]} is none")
             i_impedance = None if len(con) < 5 else Impedance(con[4])
             node = NetworkNode(net, parent, con[2], i_impedance)
-            node.index = con[1]
-            if nodes[con[1]] is not None:
+            node.index = i + 1
+            if con[1] in net.id_map:
                 raise Exception(f"Attempting to write to node {con[1]} twice")
-            nodes[con[1]] = node
+            net.id_map += [con[1]]
+
+            nodes[net.id_map.index(con[1])] = node
             parent.add_child(node, Impedance(con[3]))
 
         net.root = root
@@ -401,10 +407,6 @@ class Network:
 
         return (sigma_1, sigma_2)
 
-    def set_meters(self, indices: list[int], meterType: MeterType):
-        for i in indices:
-            self.nodes[i].meter = meterType
-
     def compute_true_sigmas(self):
         voltage_variances = [0.0] * self.size
         voltage_pvariances = [0.0] * self.size
@@ -521,6 +523,23 @@ class Network:
         A_inv = np.linalg.inv(A)
 
         return A_inv[: self.size * 4, : self.size * 4]
+
+    def apply_measurements(self, df, meter: MeterType):
+        for node in self.nodes:
+            data_index = self.id_map[node.index]
+            if data_index in df.index:
+                node.measured_v, node.measured_theta = cmath.polar(
+                    df.loc[data_index][0]
+                )
+                node.measured_i, phase = cmath.polar(df.loc[data_index][1])
+                node.measured_phi = phase - node.measured_theta
+                node.meter = meter
+            else:
+                node.measured_v = 0
+                node.measured_i = 0
+                node.measured_theta = 0
+                node.measured_phi = 0
+                node.meter = MeterType.NONE
 
     def print_node_stats(self):
         for node in self.nodes:

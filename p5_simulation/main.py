@@ -33,7 +33,6 @@ def main():
             # [2,4, 30, 1000],
             # [2,5, 30, 1000],
             # [2,6, 30, 1000],
-
             # [0, 1, PMU, 40 + 40j],
             # [0, 2, PMU, 50 + 40j, 2_000 + 1_000j],
             # [0, 3, PMU, 50 + 40j, 2_000 + 1_000j],
@@ -56,7 +55,6 @@ def main():
             # [12, 20, PMU, 50 + 40j, 2_000 + 1_000j],
             # [12, 21, PMU, 50 + 40j, 2_000 + 1_000j],
             # [12, 22, PMU, 5.694 + 40j, 2_000 + 1_000j],
-
             # [0, 1, MeterType.NONE, 31 + 2j],
             # [1, 2, PMU, 20 + 5j, 1_000 + 500j],
             # [1, 3, MeterType.NONE, 12 + 3j, 1_000 + 500j],
@@ -96,30 +94,55 @@ def main():
         ]
     )
     # net.set_angles()
-    # net = network_from_file("p5_simulation/data/topology.txt")
-    # measurements = measurements_from_file("p5_simulation/data/measurements.xlsx")
-    # _, x_df = next(measurements)
-    # x_df.sort_index(inplace=True)
-    # node_indices = list(x_df.index)
-    # node_indices.sort()
-    # x_indices = list(x_df.index) + list(x_df.index + net.size)
+    net = network_from_file("p5_simulation/data/topology.txt")
 
-    net.print_node_stats()
+    measurements = measurements_from_file("p5_simulation/data/measurements.xlsx")
+    for time, x_df in measurements:
+        x_df.sort_index(inplace=True)
 
-    new_net, locs = anneeling_solve(deepcopy(net), 7)
-    print(
-        "1-indexed locations (anneeling):",
-        [i + 1 for i in locs],
-        "Assessment:",
-        assessment_metric(net, new_net),
-    )
-    new_cp_net, locs2 = greedy_solve(deepcopy(net), 7)
-    print(
-        "1-indexed locations (greedy):",
-        [i + 1 for i in locs2],
-        "Assessment:",
-        assessment_metric(net, new_cp_net),
-    )
+        z = x_df.to_numpy().T.reshape((-1,))
+
+        net.apply_measurements(x_df, meter=MeterType.PMU)
+        D = net.create_D_matrix()
+
+        sigma_1, sigma_2 = net.compute_sigmas()
+
+        A, g = net.compute_A_and_g(z, sigma_1, sigma_2)
+
+        try:
+            F11 = net.compute_F11_matrix(A)
+        except np.linalg.LinAlgError:
+            print(f"singular matrix: {time}")
+            continue
+        g_bar = augment_vector(g)
+
+        x_hat_bar = F11 @ g_bar
+
+        x_hat = x_hat_bar[: net.size * 2]
+
+        # print("z", z)
+        # print("x_hat", x_hat)
+
+        z_hat = D @ x_hat
+        norm_diff = (z_hat - z) / np.abs(z)
+        print(time, norm_diff @ norm_diff.conj())
+
+    # net.print_node_stats()
+
+    # new_net, locs = anneeling_solve(deepcopy(net), 7)
+    # print(
+    #     "1-indexed locations (anneeling):",
+    #     [i + 1 for i in locs],
+    #     "Assessment:",
+    #     assessment_metric(net, new_net),
+    # )
+    # new_cp_net, locs2 = greedy_solve(deepcopy(net), 7)
+    # print(
+    #     "1-indexed locations (greedy):",
+    #     [i + 1 for i in locs2],
+    #     "Assessment:",
+    #     assessment_metric(net, new_cp_net),
+    # )
 
     # print(x_indices)
     # net.set_meters(node_indices, MeterType.EM)
@@ -150,8 +173,8 @@ def main():
 
     return
 
-    x = net.state_vector()
-    z = D @ net.realize_measurements()
+    # x = net.state_vector()
+    # z = D @ net.realize_measurements()
 
     sigma_1, sigma_2 = net.compute_sigmas()
 
