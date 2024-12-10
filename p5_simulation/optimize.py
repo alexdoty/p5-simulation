@@ -1,4 +1,5 @@
 
+from math import comb
 from numpy.typing import NDArray
 import numpy as np
 from random import choice, randint, random
@@ -6,6 +7,8 @@ from p5_simulation.utils import augment_matrices, augment_matrix, augment_transf
 from p5_simulation.trees import MeterType, Network, NetworkNode
 from queue import Queue
 from copy import deepcopy
+
+EPS = 1e-1
 
 # Returns max distance depending on temperature
 def smoothing_function(x: float, smooth: float, max: int) -> float:
@@ -35,13 +38,16 @@ def compare_configurations(c1: int, c2: int) -> bool:
     return False
 
 def compute_projmat_and_leverages(net: Network) -> tuple[NDArray, list[float], bool]:
+    inv = True
     D = net.create_D_matrix()
     S1, S2 = net.compute_true_sigmas()
 
     # Compute relevant matrices
     A = net.compute_A(S1, S2)
+
     if np.linalg.det(A) == 0:
-        return A, [], False
+        inv = False
+
     F11 = net.compute_F11_matrix(A)
     B = np.linalg.inv(S1 - S2.conjugate() @ np.linalg.inv(S1) @ S2)
     W = S2 @ np.linalg.inv(S1.conjugate())
@@ -58,9 +64,9 @@ def compute_projmat_and_leverages(net: Network) -> tuple[NDArray, list[float], b
     s = (H_real.shape[1] // 4)
     leverages: list[float] = [0] * s
     for i in range(0, s):
-        leverages[i] = H_real[i, i] + H_real[i + s, i + s] + H_real[i + 2 * s, i + 2 * s] + H_real[i + 3 * s, i + 3 * s]
+        leverages[i] = max(H_real[i, i] + H_real[i + 2 * s, i + 2 * s], H_real[i + s, i + s] + H_real[i + 3 * s, i + 3 * s])
 
-    return H_real, leverages, True
+    return H_real, leverages, inv
 
 def compute_F11(net: Network) -> NDArray:
     D = net.create_D_matrix()
@@ -74,43 +80,56 @@ def assessment_metric(old: Network, new: Network) -> float:
     new_F11 = compute_F11(new)
     return 1/(4 * new.size) * np.linalg.trace(new_F11 / old_F11).real
 
-def anneeling_solve(net: Network, k: int, t: int = 20) -> tuple[Network, list[int]]:
-    temp = t
+def anneeling_solve(net: Network, k: int) -> tuple[Network, list[int]]:
+    temp = 1
     initial_locations = set(setup(net, k))
     locations = deepcopy(initial_locations)
-    dec: float = t/(100 * k)
     level: int = 1
     possible_location: int = 0
 
-    # i = 0
+    bincoef = comb(len(initial_locations), level)
+    dt = -1/(np.log(bincoef) * 100)
+
+    i = 0
     while temp > 0:
-        # i += 1
-        temp -= dec
-        # _, leverages = compute_projmat_and_leverages(net)
-        r = random()
-        r2 = random()
-        bound = t/level/2
+        i += 1
+        temp += dt
+        # print(f"Temp is: {temp}")
+        r: float = random()
+        r2: float = random()
+
+        if temp >= 0.5:
+            r = 0
 
         net.set_meters_anneeling(locations)
         if r <= 0.95 and level > 2:
+            # print(f"Trying to swap at iteration {i}!")
             possible_location = choice(list(locations))
             not_metered_location = choice(list(initial_locations.difference(locations)))
             union_locations = locations.union({not_metered_location})
-
-            net.set_meters_anneeling(union_locations)
-
-            _, leverages, inv = compute_projmat_and_leverages(net)
             sorted_locs = sorted(list(union_locations))
 
+            net.set_meters_anneeling(union_locations)
+            _, leverages, inv = compute_projmat_and_leverages(net)
+
+            if leverages[sorted_locs.index(possible_location)] >= 2 - EPS:
+                continue
+
             if leverages[sorted_locs.index(possible_location)] < leverages[sorted_locs.index(not_metered_location)]:
-                if temp > bound:
-                    r2 += 0.2
-                if r2 > 0.7:
+                if temp > 0.5:
+                    r2 += 0.02
+                    pass
+                if r2 > 0.9999:
+                    print(f"Swapping at iteration {i} with worse leverage!")
                     locations.add(not_metered_location)
                     locations.remove(possible_location)
+            else:
+                locations.add(not_metered_location)
+                locations.remove(possible_location)
         else:
             if level == k+1:
                 continue
+            print(f"New level at iteration {i}!")
             _, leverages, inv = compute_projmat_and_leverages(net)
             loc = 0
             lowest = leverages[0]
@@ -125,8 +144,13 @@ def anneeling_solve(net: Network, k: int, t: int = 20) -> tuple[Network, list[in
             locations.remove(possible_location)
             level += 1
 
+            # Update bincoef and dt
+            bincoef = comb(len(initial_locations), level)
+            dt = -1/(np.log(bincoef) * 100)
+            temp = 1
+
     net.set_meters_anneeling(locations)
-    return net, list(locations)
+    return net, sorted(list(locations))
 
 def test_solve(net: Network, k: int, t: int = 20) -> list[int]:
     # Controls the probability of moving far away from good states.
