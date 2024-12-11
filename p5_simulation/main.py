@@ -1,4 +1,7 @@
 from copy import deepcopy
+from pickletools import optimize
+from random import choice
+
 import numpy as np
 from p5_simulation.trees import Network, MeterType
 from p5_simulation.utils import (
@@ -100,10 +103,17 @@ def main():
     for time, x_df in measurements:
         x_df.sort_index(inplace=True)
 
-        z = x_df.to_numpy().T.reshape((-1,))
-
+        # disabled = np.random.choice(x_df.index, size=1)
+        #
+        # net.apply_measurements(x_df, meter=MeterType.PMU)
+        # old_D = net.create_D_matrix()
+        # old_z = x_df.to_numpy().T.reshape((-1,))
+        #
+        # x_df.drop(disabled, inplace=True)
         net.apply_measurements(x_df, meter=MeterType.PMU)
+
         D = net.create_D_matrix()
+        z = x_df.to_numpy().T.reshape((-1,))
 
         sigma_1, sigma_2 = net.compute_sigmas()
 
@@ -126,7 +136,8 @@ def main():
         z_hat = D @ x_hat
         norm_diff = (z_hat - z) / np.abs(z)
         print(time, norm_diff @ norm_diff.conj())
-
+        _, leverages, _ = compute_projmat_and_leverages(net)
+        print(leverages)
     # net.print_node_stats()
 
     # new_net, locs = anneeling_solve(deepcopy(net), 7)

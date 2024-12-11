@@ -44,6 +44,9 @@ class NetworkNode:
     meter: MeterType
     index: int
 
+    current: complex
+    voltage: complex
+
     measured_phi: Optional[float] = None
     measured_theta: Optional[float] = None
     measured_v: Optional[float] = None
@@ -76,25 +79,6 @@ class NetworkNode:
             if c is child:
                 return imp
         raise Exception
-
-    # Voltage between the nodes live and neutral
-    @cached_property
-    def voltage(self) -> Voltage:
-        if self.parent is None:
-            return SOURCE_VOLTAGE
-        return (
-            self.parent.voltage
-            - self.current * self.parent.get_direct_child_impedance(self)
-        )
-
-    # Current going from the parent to self
-    @cached_property
-    def current(self) -> Current:
-        if self.parent is None:
-            return self.voltage / self.impedance
-        return self.parent.voltage / (
-            self.parent.get_direct_child_impedance(self) + self.impedance
-        )
 
     def add_child(self, child: NetworkNode, impedance: Impedance):
         self.children.append((child, impedance))
@@ -528,18 +512,13 @@ class Network:
         for node in self.nodes:
             data_index = self.id_map[node.index]
             if data_index in df.index:
-                node.measured_v, node.measured_theta = cmath.polar(
-                    df.loc[data_index][0]
-                )
-                node.measured_i, phase = cmath.polar(df.loc[data_index][1])
-                node.measured_phi = phase - node.measured_theta
+                node.voltage, node.current = df.loc[data_index]
                 node.meter = meter
             else:
-                node.measured_v = 0
-                node.measured_i = 0
-                node.measured_theta = 0
-                node.measured_phi = 0
+                node.voltage = 0
+                node.current = 0
                 node.meter = MeterType.NONE
+        self.realize_measurements()
 
     def print_node_stats(self):
         for node in self.nodes:
