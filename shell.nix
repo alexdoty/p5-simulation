@@ -4,6 +4,7 @@ in
 pkgs.mkShell rec {
   packages = [
     pkgs.python312
+    pkgs.pypy310
     pkgs.poetry
     pkgs.zlib
   ];

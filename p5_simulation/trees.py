@@ -270,7 +270,7 @@ class Network:
 
         return net
 
-    def set_meters_anneeling(self, locs: Iterable[int]):
+    def set_meters_no_type(self, locs: Iterable[int]):
         for node in self.nodes:
             if node.index in locs:
                 node.meter = MeterType.PMU
