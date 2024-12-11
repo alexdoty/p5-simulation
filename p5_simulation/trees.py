@@ -3,6 +3,7 @@ import math
 from typing import Iterable, Self, Optional
 from functools import cached_property
 import numpy as np
+import pandas
 from numpy.typing import NDArray
 from math import pi, tau
 import cmath
@@ -298,7 +299,7 @@ class Network:
         self.constraint_matrix = C
         return C
 
-    def realize_measurements(self):
+    def realize_measurements(self, apply_error=True):
         import random
 
         z = np.zeros(self.size * 2, dtype=complex)
@@ -308,6 +309,7 @@ class Network:
         for node in self.nodes:
             voltage = node.voltage
             current = node.current
+
             v = abs(voltage)
             i = abs(current)
             theta = cmath.phase(voltage)
@@ -316,12 +318,14 @@ class Network:
             v_stdev = v * self.voltage_rel_err / r_0
             i_stdev = i * self.current_rel_err / r_0
 
-            v_err = v + random.normalvariate(0.0, v_stdev)
-            i_err = i + random.normalvariate(0.0, i_stdev)
-            phi_err = phi + random.normalvariate(0.0, self.phi_stdev)
+            v_err = v + random.normalvariate(0.0, v_stdev) * apply_error
+            i_err = i + random.normalvariate(0.0, i_stdev) * apply_error
+            phi_err = phi + random.normalvariate(0.0, self.phi_stdev) * apply_error
 
             if node.meter != MeterType.EM:
-                theta_err = theta + random.normalvariate(0.0, self.theta_stdev)
+                theta_err = (
+                    theta + random.normalvariate(0.0, self.theta_stdev) * apply_error
+                )
                 node.measured_theta = theta_err
             else:
                 node.measured_theta = node.parent.measured_theta
@@ -337,7 +341,6 @@ class Network:
 
             z[node.voltage_index()] = voltage_measure
             z[node.current_index()] = current_measure
-
         return z
 
     def compute_sigmas(self):
@@ -509,16 +512,25 @@ class Network:
         return A_inv[: self.size * 4, : self.size * 4]
 
     def apply_measurements(self, df, meter: MeterType):
-        for node in self.nodes:
-            data_index = self.id_map[node.index]
-            if data_index in df.index:
-                node.voltage, node.current = df.loc[data_index]
-                node.meter = meter
-            else:
-                node.voltage = 0
-                node.current = 0
-                node.meter = MeterType.NONE
-        self.realize_measurements()
+        if isinstance(df, pandas.DataFrame):
+            for node in self.nodes:
+                data_index = self.id_map[node.index]
+                if data_index in df.index:
+                    node.voltage, node.current = df.loc[data_index]
+                    node.meter = meter
+                else:
+                    node.voltage = 0
+                    node.current = 0
+                    node.meter = MeterType.NONE
+            return
+        if isinstance(df, np.ndarray):
+            if self.size != df.shape[0]:
+                Exception("Incompatible sizes")
+            for i in range(self.size):
+                self.nodes[i].voltage, self.nodes[i].current = df[i]
+                self.nodes[i].meter = meter
+            return
+        Exception("Incompatible datatype")
 
     def print_node_stats(self):
         for node in self.nodes:

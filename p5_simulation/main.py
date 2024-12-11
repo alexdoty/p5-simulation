@@ -111,6 +111,7 @@ def main():
         #
         # x_df.drop(disabled, inplace=True)
         net.apply_measurements(x_df, meter=MeterType.PMU)
+        net.realize_measurements(apply_error=False)
 
         D = net.create_D_matrix()
         z = x_df.to_numpy().T.reshape((-1,))
@@ -130,16 +131,37 @@ def main():
 
         x_hat = x_hat_bar[: net.size * 2]
 
+        pseudo_measures = x_hat.reshape(2, -1).T
+
+        net.apply_measurements(pseudo_measures, MeterType.PMU)
+
+        for node in np.random.choice(net.nodes, 100):
+            node.meter = MeterType.NONE
+
+        D = net.create_D_matrix()
+        z = D @ net.realize_measurements(apply_error=True)
+
+        sigma_1, sigma_2 = net.compute_sigmas()
+
+        A, g = net.compute_A_and_g(z, sigma_1, sigma_2)
+
+        try:
+            F11 = net.compute_F11_matrix(A)
+        except np.linalg.LinAlgError:
+            print(f"singular matrix: {time}")
+            continue
+        g_bar = augment_vector(g)
+
+        x_hat_bar = F11 @ g_bar
+
+        x_hat_new = x_hat_bar[: net.size * 2]
+
         # print("z", z)
         # print("x_hat", x_hat)
 
-        z_hat = D @ x_hat
-        norm_diff = (z_hat - z) / np.abs(z)
-        print(time, norm_diff @ norm_diff.conj())
-        _, leverages, _ = compute_projmat_and_leverages(net)
-        print(leverages)
-    # net.print_node_stats()
-
+        # z_hat = D @ x_hat
+        norm_diff = np.mean(np.abs(x_hat - x_hat_new) / np.abs(x_hat))
+        print(norm_diff)
     # new_net, locs = anneeling_solve(deepcopy(net), 7)
     # print(
     #     "1-indexed locations (anneeling):",
