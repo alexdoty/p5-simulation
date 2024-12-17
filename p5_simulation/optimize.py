@@ -178,7 +178,7 @@ def anneeling_solve(net: Network, k: int) -> tuple[Network, list[int]]:
     bincoef: int = comb(len(initial_locations), level)
     dt: float = -1 / (np.log(bincoef) * 100)
 
-    while temp > 0:
+    while temp > 0 or level < k + 1:
         temp += dt
         r: float = random()
         r2: float = random()

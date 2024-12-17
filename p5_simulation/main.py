@@ -110,22 +110,79 @@ def main():
     # node_indices = list(x_df.index)
     # node_indices.sort()
     # x_indices = list(x_df.index) + list(x_df.index + net.size)
+
+    # Data from a runthrough (100 iterations, remove 8)
+    d = {
+        '7.8489': 11,
+        '8.1151': 3,
+        '14.204': 12,
+        '7.659': 11,
+        '8.9686': 6,
+        '14.4599': 1,
+        '7.4574': 9,
+        '7.6471': 5,
+        '15.534': 12,
+        '11.2887': 5,
+        '14.0078': 6,
+        '12.6502': 3,
+        '8.1025': 2,
+        '11.4772': 2,
+        '8.4286': 1,
+        '16.2426': 1,
+        '9.4109': 1,
+        '9.1559': 3,
+        '14.6569': 2,
+        '15.9756': 1,
+        '8.3054': 1,
+        '11.0921': 1,
+        '8.8943': 1
+    }
+    keys = np.array([float(s) for s in d.keys()])
+    print(np.median(keys))
+    l = []
+    e = []
+    m = []
+    for k, v in d.items():
+        f = float(k)
+        if f > 14.0078:
+           m.append(v)
+           continue
+        if f == 14.0078:
+            e.append(v)
+            continue
+        l.append(v)
+    print(np.mean(keys))
+    print(dict(sorted(d.items(), key=lambda item: float(item[0]))))
+    print(sum(l)/100)
+    print(sum(e)/100)
+    print(sum(m)/100)
+
     n = 8
     net.print_node_stats()
     average_ass: float = 0.0
-    # new_net, locs = anneeling_solve(deepcopy(net), 3)
-    for _ in range(0, 100):
+    distribution: dict[str, int] = dict()
+    for i in range(0, 100):
         new_net, locs = anneeling_solve(deepcopy(net), n)
         ass = assessment_metric(net, new_net)
+        fass = str(round(ass, 4))
+        if fass not in distribution:
+            distribution[fass] = 1
+        else:
+            distribution[fass] += 1
+
         average_ass += ass
+        print(
+            f"({i}) 1-indexed locations (anneeling):",
+            [j + 1 for j in locs],
+            "Assessment:",
+            ass
+        )
+        print("Distribution:", distribution)
+
     average_ass /= 100
-    # ass = assessment_metric(net, new_net)
     print(
-        # "1-indexed locations (anneeling):",
-        # [i + 1 for i in locs],
-        "Assessment:",
+        "Mean assessment over 100 iterations:",
         average_ass
-        # assessment_metric(net, new_net),
     )
 
     # print(

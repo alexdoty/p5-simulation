@@ -162,3 +162,5 @@ cython_debug/
 #.idea/
 
 p5_simulation/data/
+nix/
+*.nix
